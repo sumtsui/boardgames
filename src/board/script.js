@@ -78,7 +78,7 @@ const cubeMap = getCubeMap(cubeArrays);
 
 let tileCount = 1;
 
-function makeTile(left, top, isPlayArea, isObstacle, isStartTile) {
+function makeTile(left, top, isPlayArea, isStartTile, color) {
   const tile = document.createElement("div");
   tile.style.border = "1px dotted gray";
   tile.style.width = CUBE_WIDTH + "px";
@@ -92,17 +92,27 @@ function makeTile(left, top, isPlayArea, isObstacle, isStartTile) {
   if (isStartTile) {
     tile.style.backgroundColor = "white";
   }
-  if (isObstacle) {
-    tile.style.backgroundColor = "red";
+  if (color) {
+    tile.style.backgroundColor = color;
   }
   tile.innerText = tileCount;
+  if (path[tileCount]) {
+    const obj = {
+      "-1": "<",
+      15: "|",
+      "-15": "^",
+      1: ">",
+    };
+    tile.innerText = tileCount + "\n" + obj[path[tileCount]];
+    tile.style.backgroundColor = "skyblue";
+  }
   tileCount++;
   wrapper.appendChild(tile);
 }
 
 const obstacles = {};
 
-function setObstacle(start) {
+function setObstacle(start, color) {
   // assume obstacle always has top left as starting point
   const CROSSS_SURFACE_MAP = {
     1: 5,
@@ -147,10 +157,10 @@ function setObstacle(start) {
     throw "OBSTACLE_CREATE_FAIL";
   }
 
-  obstacles[start] = start;
-  obstacles[right] = right;
-  obstacles[down] = down;
-  obstacles[diagonal] = diagonal;
+  obstacles[start] = color;
+  obstacles[right] = color;
+  obstacles[down] = color;
+  obstacles[diagonal] = color;
 }
 
 // setObstacle(10)
@@ -159,34 +169,41 @@ function setObstacle(start) {
 const NOT_IN_PLAY_SURFACES = [0, 2, 6, 8];
 
 function setAllObstactles() {
-  const OBSTACLE_TOTAL = 20;
+  const OBSTACLE_TYPES = ["red", "blue", "yellow", "green", "purple"];
+  const OBSTACLE_TOTAL = 15;
   const ATTEMPT_TOTAL = 50;
+  const LOWER_EDGES = {
+    5: {
+      col: 4,
+    },
+    7: {
+      row: 4,
+    },
+  };
+  const BAD_STARTING_POINTS = [70, 145, 140];
   let obstacleCount = 0;
   let attempt = 0;
+  let curColorIdx = 0;
 
   while (obstacleCount < OBSTACLE_TOTAL && attempt < ATTEMPT_TOTAL) {
     attempt++;
     const random = Math.ceil(225 * Math.random());
     const randomStart = cubeMap[random];
-    const FORBIDDEN_PLACES = {
-      5: {
-        col: 4,
-      },
-      7: {
-        row: 4,
-      },
-    };
+
     if (
       NOT_IN_PLAY_SURFACES.includes(randomStart.surface) ||
-      FORBIDDEN_PLACES[randomStart.surface]?.row === randomStart.row ||
-      FORBIDDEN_PLACES[randomStart.surface]?.col === randomStart.col
+      LOWER_EDGES[randomStart.surface]?.row === randomStart.row ||
+      LOWER_EDGES[randomStart.surface]?.col === randomStart.col ||
+      BAD_STARTING_POINTS.includes(random)
     ) {
       console.log("OBESTACLE_BAD_START_POINT");
       continue;
     }
     try {
-      setObstacle(random);
+      const color = OBSTACLE_TYPES[curColorIdx % OBSTACLE_TYPES.length];
+      setObstacle(random, color);
       obstacleCount++;
+      curColorIdx++;
     } catch (err) {
       console.log(err);
     }
@@ -195,9 +212,9 @@ function setAllObstactles() {
   return obstacleCount;
 }
 
-const obCount = setAllObstactles();
+// const obCount = setAllObstactles();
 
-console.log("obCount", obCount);
+// console.log("obCount", obCount);
 
 function renderCube() {
   while (tileCount <= TILE_TOTAL) {
@@ -206,10 +223,66 @@ function renderCube() {
     const isPlayArea =
       (tileCount % BOARD_WIDTH > 5 && tileCount % BOARD_WIDTH < 11) ||
       (tileCount > 75 && tileCount < 151);
-    const isObstacle = obstacles[tileCount];
+    const obstacleColor = obstacles[tileCount];
     const isPlayerStart = PLAYER_START_TILES.includes(tileCount);
-    makeTile(left, top, isPlayArea, isObstacle, isPlayerStart);
+    makeTile(left, top, isPlayArea, isPlayerStart, obstacleColor);
   }
 }
+
+var path = {};
+function setPaths() {
+  const start = PLAYER_START_TILES[0];
+  const end = PLAYER_START_TILES[2];
+  let step = start;
+  while (step !== end) {
+    try {
+      const directions = _decideToMove(step);
+      let dir = directions[Math.floor(Math.random() * directions.length)];
+      while (path[step + dir]) {
+        directions.splice(directions.indexOf(dir), 1);
+        if (directions.length === 0) throw "no place to go!";
+        else dir = directions[Math.floor(Math.random() * directions.length)];
+      }
+      path[step] = dir;
+      step += dir;
+    } catch (error) {
+      console.log(error);
+      break;
+    }
+  }
+
+  function _decideToMove(current) {
+    const directions = [-1, 15, -15, 1];
+    const tile = cubeMap[current];
+
+    const { surface, row, col } = tile;
+    if (surface === 1) {
+      if (row === 0) directions.splice(directions.indexOf(-15), 1);
+      if (col === 0) directions.splice(directions.indexOf(-1), 1);
+      if (col === 4) directions.splice(directions.indexOf(1), 1);
+    }
+    if (surface === 3) {
+      if (row === 0) directions.splice(directions.indexOf(-15), 1);
+      if (row === 4) directions.splice(directions.indexOf(15), 1);
+      if (col === 0) directions.splice(directions.indexOf(-1), 1);
+    }
+    if (surface === 5) {
+      if (row === 0) directions.splice(directions.indexOf(-15), 1);
+      if (row === 4) directions.splice(directions.indexOf(15), 1);
+      if (col === 4) directions.splice(directions.indexOf(1), 1);
+    }
+    if (surface === 7) {
+      if (row === 4) directions.splice(directions.indexOf(15), 1);
+      if (col === 0) directions.splice(directions.indexOf(-1), 1);
+      if (col === 4) directions.splice(directions.indexOf(1), 1);
+    }
+
+    // if (directions.includes)
+
+    return directions;
+  }
+}
+
+setPaths();
 
 renderCube();
