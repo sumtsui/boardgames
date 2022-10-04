@@ -3,6 +3,17 @@ const CUBE_WIDTH = 60;
 const BOARD_WIDTH = 15;
 const TILE_TOTAL = 225;
 const PLAYER_START_TILES = [38, 118, 188, 108];
+const CORNERS = [70, 145, 140];
+const EDGES = {
+  5: {
+    col: 4,
+  },
+  7: {
+    row: 4,
+  },
+};
+const OBSTACLE_TYPES = ["red", "blue", "yellow", "green", "purple"];
+const IN_PLAY_SURFACES = [1, 3, 4, 5, 7];
 
 function getCubeArrays() {
   const subsBy5 = [[]];
@@ -20,8 +31,6 @@ function getCubeArrays() {
       i++;
     }
   }
-
-  // console.log('subsBy5', subsBy5)
 
   const result = [[], [], []];
   curSubArr = 0;
@@ -96,16 +105,7 @@ function makeTile(left, top, isPlayArea, isStartTile, color) {
     tile.style.backgroundColor = color;
   }
   tile.innerText = tileCount;
-  if (path[tileCount]) {
-    const obj = {
-      "-1": "<",
-      15: "|",
-      "-15": "^",
-      1: ">",
-    };
-    tile.innerText = tileCount + "\n" + obj[path[tileCount]];
-    tile.style.backgroundColor = "skyblue";
-  }
+
   tileCount++;
   wrapper.appendChild(tile);
 }
@@ -146,10 +146,13 @@ function setObstacle(start, color) {
 
   if (
     obstacles[start] ||
+    obstacles[start - 1] ||
     obstacles[right] ||
+    obstacles[right + 1] ||
     obstacles[down] ||
+    obstacles[down + 15] ||
     obstacles[diagonal] ||
-    PLAYER_START_TILES.includes(start) ||
+    obstacles[diagonal + 1] ||
     PLAYER_START_TILES.includes(right) ||
     PLAYER_START_TILES.includes(down) ||
     PLAYER_START_TILES.includes(diagonal)
@@ -161,60 +164,74 @@ function setObstacle(start, color) {
   obstacles[right] = color;
   obstacles[down] = color;
   obstacles[diagonal] = color;
+
+  return [start, right, down, diagonal];
 }
 
-// setObstacle(10)
-// setObstacle(201)
-
-const NOT_IN_PLAY_SURFACES = [0, 2, 6, 8];
-
 function setAllObstactles() {
-  const OBSTACLE_TYPES = ["red", "blue", "yellow", "green", "purple"];
+  const tiles = Array(TILE_TOTAL)
+    .fill()
+    .map((_, i) => i + 1)
+    .filter((i) => {
+      const start = cubeMap[i];
+      if (
+        !PLAYER_START_TILES.includes(i) &&
+        IN_PLAY_SURFACES.includes(start.surface) &&
+        !CORNERS.includes(i) &&
+        EDGES[start.surface]?.row !== start.row &&
+        EDGES[start.surface]?.col !== start.col
+      ) {
+        return i;
+      }
+    });
+  const tilesMap = tiles.reduce(
+    (accu, cur, idx) => ({ ...accu, [cur]: idx }),
+    {}
+  );
+  const obstaclePerSurfaceCount = {};
+
+  // console.log(tilesMap);
+
   const OBSTACLE_TOTAL = 15;
-  const ATTEMPT_TOTAL = 50;
-  const LOWER_EDGES = {
-    5: {
-      col: 4,
-    },
-    7: {
-      row: 4,
-    },
-  };
-  const BAD_STARTING_POINTS = [70, 145, 140];
+  const ATTEMPT_TOTAL = 100;
+
   let obstacleCount = 0;
   let attempt = 0;
   let curColorIdx = 0;
 
   while (obstacleCount < OBSTACLE_TOTAL && attempt < ATTEMPT_TOTAL) {
     attempt++;
-    const random = Math.ceil(225 * Math.random());
-    const randomStart = cubeMap[random];
+    const idx = Math.floor(tiles.length * Math.random());
+    const start = tiles[idx];
 
-    if (
-      NOT_IN_PLAY_SURFACES.includes(randomStart.surface) ||
-      LOWER_EDGES[randomStart.surface]?.row === randomStart.row ||
-      LOWER_EDGES[randomStart.surface]?.col === randomStart.col ||
-      BAD_STARTING_POINTS.includes(random)
-    ) {
-      console.log("OBESTACLE_BAD_START_POINT");
-      continue;
-    }
     try {
+      const startCountOnSurface =
+        obstaclePerSurfaceCount[cubeMap[start].surface];
+      if (startCountOnSurface >= Math.ceil(OBSTACLE_TOTAL / 5)) {
+        throw "enough obstacle in surface " + cubeMap[start].surface;
+      }
       const color = OBSTACLE_TYPES[curColorIdx % OBSTACLE_TYPES.length];
-      setObstacle(random, color);
+      const newObstacle = setObstacle(start, color);
+      newObstacle.forEach((i) => tiles.splice(tilesMap[i], 1));
+
+      obstaclePerSurfaceCount[cubeMap[start].surface] = startCountOnSurface
+        ? startCountOnSurface + 1
+        : 1;
       obstacleCount++;
       curColorIdx++;
     } catch (err) {
-      console.log(err);
+      console.log(err, idx, start);
     }
   }
 
-  return obstacleCount;
+  console.log("obstaclePerSurfaceCount", obstaclePerSurfaceCount);
+
+  return { obstacleCount, attempt };
 }
 
-// const obCount = setAllObstactles();
+const obCount = setAllObstactles();
 
-// console.log("obCount", obCount);
+console.log("obCount", obCount);
 
 function renderCube() {
   while (tileCount <= TILE_TOTAL) {
@@ -229,60 +246,86 @@ function renderCube() {
   }
 }
 
-var path = {};
-function setPaths() {
-  const start = PLAYER_START_TILES[0];
-  const end = PLAYER_START_TILES[2];
-  let step = start;
-  while (step !== end) {
-    try {
-      const directions = _decideToMove(step);
-      let dir = directions[Math.floor(Math.random() * directions.length)];
-      while (path[step + dir]) {
-        directions.splice(directions.indexOf(dir), 1);
-        if (directions.length === 0) throw "no place to go!";
-        else dir = directions[Math.floor(Math.random() * directions.length)];
-      }
-      path[step] = dir;
-      step += dir;
-    } catch (error) {
-      console.log(error);
-      break;
-    }
-  }
-
-  function _decideToMove(current) {
-    const directions = [-1, 15, -15, 1];
-    const tile = cubeMap[current];
-
-    const { surface, row, col } = tile;
-    if (surface === 1) {
-      if (row === 0) directions.splice(directions.indexOf(-15), 1);
-      if (col === 0) directions.splice(directions.indexOf(-1), 1);
-      if (col === 4) directions.splice(directions.indexOf(1), 1);
-    }
-    if (surface === 3) {
-      if (row === 0) directions.splice(directions.indexOf(-15), 1);
-      if (row === 4) directions.splice(directions.indexOf(15), 1);
-      if (col === 0) directions.splice(directions.indexOf(-1), 1);
-    }
-    if (surface === 5) {
-      if (row === 0) directions.splice(directions.indexOf(-15), 1);
-      if (row === 4) directions.splice(directions.indexOf(15), 1);
-      if (col === 4) directions.splice(directions.indexOf(1), 1);
-    }
-    if (surface === 7) {
-      if (row === 4) directions.splice(directions.indexOf(15), 1);
-      if (col === 0) directions.splice(directions.indexOf(-1), 1);
-      if (col === 4) directions.splice(directions.indexOf(1), 1);
-    }
-
-    // if (directions.includes)
-
-    return directions;
-  }
-}
-
-setPaths();
-
 renderCube();
+
+// var path = {};
+// function setPaths(start, end) {
+//   // const start = PLAYER_START_TILES[0];
+//   // const end = PLAYER_START_TILES[2];
+//   let step = start;
+//   let preDir = null;
+//   while (step !== end) {
+//     try {
+//       const directions = _decideToMove(step, preDir);
+//       let dir = directions[Math.floor(Math.random() * directions.length)];
+//       console.log("step", step, directions, dir);
+//       while (path[step + dir]) {
+//         directions.splice(directions.indexOf(dir), 1);
+//         if (directions.length === 0) throw "no place to go!";
+//         else dir = directions[Math.floor(Math.random() * directions.length)];
+//       }
+//       path[step] = dir;
+//       step += dir;
+//       preDir = dir;
+//     } catch (error) {
+//       console.log(error);
+//       break;
+//     }
+//   }
+
+//   function _decideToMove(current, preDir) {
+//     const directions = [-1, 15, -15, 1];
+//     const tile = cubeMap[current];
+
+//     const { surface, row, col } = tile;
+//     if (surface === 1) {
+//       if (row === 0) directions.splice(directions.indexOf(-15), 1);
+//       if (col === 0)
+//         directions.splice(directions.indexOf(-1), 1, 70 - row * 14);
+//       if (col === 4) directions.splice(directions.indexOf(1), 1, 80 - row * 16);
+//     }
+//     if (surface === 3) {
+//       if (row === 0)
+//         directions.splice(directions.indexOf(-15), 1, -(70 - col * 14));
+//       if (row === 4)
+//         directions.splice(directions.indexOf(15), 1, 80 - col * 16);
+//       if (col === 0) directions.splice(directions.indexOf(-1), 1);
+//     }
+//     if (surface === 5) {
+//       if (row === 0)
+//         directions.splice(directions.indexOf(-15), 1, -((col + 1) * 16));
+//       if (row === 4)
+//         directions.splice(directions.indexOf(15), 1, (col + 1) * 14);
+//       if (col === 4) directions.splice(directions.indexOf(1), 1);
+//     }
+//     if (surface === 7) {
+//       if (row === 4) directions.splice(directions.indexOf(15), 1);
+//       if (col === 0)
+//         directions.splice(directions.indexOf(-1), 1, -((row + 1) * 16));
+//       if (col === 4)
+//         directions.splice(directions.indexOf(1), 1, -((row + 1) * 14));
+//     }
+
+//     if (preDir && directions.includes(preDir)) {
+//       directions.push(preDir, preDir, preDir);
+//     }
+
+//     // add more chance to reach to the goal
+//     // if (surface === 1 && directions.includes(15)) {
+//     //   directions.push(15, 15, 15);
+//     // }
+//     // if (surface === 3 && directions.includes(1)) {
+//     //   directions.push(1, 1, 1);
+//     // }
+//     // if (surface === 5 && directions.includes(-1)) {
+//     //   directions.push(-1, -1, -1);
+//     // }
+//     // if (surface === 7 && directions.includes(-15)) {
+//     //   directions.push(-15, -15, -15);
+//     // }
+
+//     return directions;
+//   }
+// }
+
+// setPaths(PLAYER_START_TILES[1], PLAYER_START_TILES[3]);
