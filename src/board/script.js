@@ -72,7 +72,13 @@ function getCubeMap(_cubeArrays) {
       const row = surface[j];
       let k = 0;
       while (k < row.length) {
-        result[row[k]] = { surface: i, row: j, col: k };
+        result[row[k]] = {
+          surface: i,
+          row: j,
+          col: k,
+          obstacle: null,
+          player: null,
+        };
         k++;
       }
       j++;
@@ -110,8 +116,6 @@ function makeTile(left, top, isPlayArea, isStartTile, color) {
   wrapper.appendChild(tile);
 }
 
-const obstacles = {};
-
 function setObstacle(start, color) {
   // assume obstacle always has top left as starting point
   const CROSSS_SURFACE_MAP = {
@@ -145,15 +149,16 @@ function setObstacle(start, color) {
   }
 
   if (
-    obstacles[start] ||
-    // obstacles[start - 15] ||
-    obstacles[start - 1] ||
-    obstacles[right] ||
-    obstacles[right + 1] ||
-    obstacles[down] ||
-    obstacles[down + 15] ||
-    obstacles[diagonal] ||
-    obstacles[diagonal + 1] ||
+    cubeMap[start]?.obstacle ||
+    cubeMap[start - 1]?.obstacle ||
+    cubeMap[start - 15]?.obstacle ||
+    cubeMap[right]?.obstacle ||
+    cubeMap[right + 1]?.obstacle ||
+    cubeMap[down]?.obstacle ||
+    cubeMap[down + 15]?.obstacle ||
+    cubeMap[diagonal]?.obstacle ||
+    cubeMap[diagonal + 1]?.obstacle ||
+    cubeMap[diagonal + 15]?.obstacle ||
     PLAYER_START_TILES.includes(right) ||
     PLAYER_START_TILES.includes(down) ||
     PLAYER_START_TILES.includes(diagonal)
@@ -161,10 +166,10 @@ function setObstacle(start, color) {
     throw "OBSTACLE_CREATE_FAIL";
   }
 
-  obstacles[start] = color;
-  obstacles[right] = color;
-  obstacles[down] = color;
-  obstacles[diagonal] = color;
+  cubeMap[start].obstacle = color;
+  cubeMap[right].obstacle = color;
+  cubeMap[down].obstacle = color;
+  cubeMap[diagonal].obstacle = color;
 
   return [start, right, down, diagonal];
 }
@@ -190,11 +195,8 @@ function setAllObstactles() {
     {}
   );
   const obstaclePerSurfaceCount = {};
-
-  // console.log(tilesMap);
-
   const OBSTACLE_TOTAL = 12;
-  const ATTEMPT_TOTAL = 100;
+  const ATTEMPT_TOTAL = 200;
 
   let obstacleCount = 0;
   let attempt = 0;
@@ -244,10 +246,49 @@ function renderCube() {
     const isPlayArea =
       (tileCount % BOARD_WIDTH > 5 && tileCount % BOARD_WIDTH < 11) ||
       (tileCount > 75 && tileCount < 151);
-    const obstacleColor = obstacles[tileCount];
+    const obstacleColor = cubeMap[tileCount].obstacle;
     const isPlayerStart = PLAYER_START_TILES.includes(tileCount);
     makeTile(left, top, isPlayArea, isPlayerStart, obstacleColor);
   }
 }
 
 renderCube();
+
+const GOAL_MAP = {
+  0: 2,
+  1: 3,
+  2: 0,
+  3: 1,
+};
+
+class Player {
+  id;
+  current;
+  collectedObstacles = [];
+  goal;
+  constructor(id, start) {
+    this.id = id;
+    this.current = start;
+    this.goal = PLAYER_START_TILES[GOAL_MAP[id]];
+    cubeMap[start].player = id;
+  }
+  move(from, to) {
+    const tile = cubeMap[to];
+    if (!tile) throw "unknown place " + to;
+    const { obstacle, player } = tile;
+    if (obstacle) {
+      throw `can not move to ${to}. has obstacle.`;
+    }
+    if (Number.isInteger(player)) {
+      // handle collide with other player
+      return;
+    }
+    cubeMap[to].player = this.id;
+    cubeMap[from].player = undefined;
+    if (to === this.goal) {
+      // handle reach goal
+    }
+  }
+}
+
+const players = PLAYER_START_TILES.map((t, i) => new Player(i, t));
