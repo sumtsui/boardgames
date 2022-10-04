@@ -146,6 +146,7 @@ function setObstacle(start, color) {
 
   if (
     obstacles[start] ||
+    // obstacles[start - 15] ||
     obstacles[start - 1] ||
     obstacles[right] ||
     obstacles[right + 1] ||
@@ -192,7 +193,7 @@ function setAllObstactles() {
 
   // console.log(tilesMap);
 
-  const OBSTACLE_TOTAL = 15;
+  const OBSTACLE_TOTAL = 12;
   const ATTEMPT_TOTAL = 100;
 
   let obstacleCount = 0;
@@ -207,7 +208,10 @@ function setAllObstactles() {
     try {
       const startCountOnSurface =
         obstaclePerSurfaceCount[cubeMap[start].surface];
-      if (startCountOnSurface >= Math.ceil(OBSTACLE_TOTAL / 5)) {
+      if (
+        startCountOnSurface >= Math.ceil(OBSTACLE_TOTAL / 5) ||
+        (cubeMap[start].surface === 4 && startCountOnSurface === 2)
+      ) {
         throw "enough obstacle in surface " + cubeMap[start].surface;
       }
       const color = OBSTACLE_TYPES[curColorIdx % OBSTACLE_TYPES.length];
@@ -247,85 +251,3 @@ function renderCube() {
 }
 
 renderCube();
-
-// var path = {};
-// function setPaths(start, end) {
-//   // const start = PLAYER_START_TILES[0];
-//   // const end = PLAYER_START_TILES[2];
-//   let step = start;
-//   let preDir = null;
-//   while (step !== end) {
-//     try {
-//       const directions = _decideToMove(step, preDir);
-//       let dir = directions[Math.floor(Math.random() * directions.length)];
-//       console.log("step", step, directions, dir);
-//       while (path[step + dir]) {
-//         directions.splice(directions.indexOf(dir), 1);
-//         if (directions.length === 0) throw "no place to go!";
-//         else dir = directions[Math.floor(Math.random() * directions.length)];
-//       }
-//       path[step] = dir;
-//       step += dir;
-//       preDir = dir;
-//     } catch (error) {
-//       console.log(error);
-//       break;
-//     }
-//   }
-
-//   function _decideToMove(current, preDir) {
-//     const directions = [-1, 15, -15, 1];
-//     const tile = cubeMap[current];
-
-//     const { surface, row, col } = tile;
-//     if (surface === 1) {
-//       if (row === 0) directions.splice(directions.indexOf(-15), 1);
-//       if (col === 0)
-//         directions.splice(directions.indexOf(-1), 1, 70 - row * 14);
-//       if (col === 4) directions.splice(directions.indexOf(1), 1, 80 - row * 16);
-//     }
-//     if (surface === 3) {
-//       if (row === 0)
-//         directions.splice(directions.indexOf(-15), 1, -(70 - col * 14));
-//       if (row === 4)
-//         directions.splice(directions.indexOf(15), 1, 80 - col * 16);
-//       if (col === 0) directions.splice(directions.indexOf(-1), 1);
-//     }
-//     if (surface === 5) {
-//       if (row === 0)
-//         directions.splice(directions.indexOf(-15), 1, -((col + 1) * 16));
-//       if (row === 4)
-//         directions.splice(directions.indexOf(15), 1, (col + 1) * 14);
-//       if (col === 4) directions.splice(directions.indexOf(1), 1);
-//     }
-//     if (surface === 7) {
-//       if (row === 4) directions.splice(directions.indexOf(15), 1);
-//       if (col === 0)
-//         directions.splice(directions.indexOf(-1), 1, -((row + 1) * 16));
-//       if (col === 4)
-//         directions.splice(directions.indexOf(1), 1, -((row + 1) * 14));
-//     }
-
-//     if (preDir && directions.includes(preDir)) {
-//       directions.push(preDir, preDir, preDir);
-//     }
-
-//     // add more chance to reach to the goal
-//     // if (surface === 1 && directions.includes(15)) {
-//     //   directions.push(15, 15, 15);
-//     // }
-//     // if (surface === 3 && directions.includes(1)) {
-//     //   directions.push(1, 1, 1);
-//     // }
-//     // if (surface === 5 && directions.includes(-1)) {
-//     //   directions.push(-1, -1, -1);
-//     // }
-//     // if (surface === 7 && directions.includes(-15)) {
-//     //   directions.push(-15, -15, -15);
-//     // }
-
-//     return directions;
-//   }
-// }
-
-// setPaths(PLAYER_START_TILES[1], PLAYER_START_TILES[3]);
