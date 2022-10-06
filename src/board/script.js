@@ -116,31 +116,57 @@ function makeTile(left, top, isPlayArea, isStartTile, color) {
   wrapper.appendChild(tile);
 }
 
+function getCrossSurfaceAdjecentTile(tile) {
+  const { surface, row, col } = cubeMap[tile];
+  let adjacent;
+  if (surface === 1) {
+    if (col === 4) {
+      adjacent = cubeArrays[5][0][4 - row];
+    } else if (col === 0) {
+      adjacent = cubeArrays[3][0][row];
+    }
+  } else if (surface === 5) {
+    if (row === 4) {
+      adjacent = cubeArrays[7][col][row];
+    } else if (row === 0) {
+      adjacent = cubeArrays[1][4 - col][4];
+    }
+  } else if (surface === 7) {
+    if (col === 4) {
+      adjacent = cubeArrays[5][4][row];
+    } else if (col === 0) {
+      adjacent = cubeArrays[3][4][4 - row];
+    }
+  } else if (surface === 3) {
+    if (row === 4) {
+      adjacent = cubeArrays[7][4 - col][0];
+    } else if (row === 0) {
+      adjacent = cubeArrays[1][col][0];
+    }
+  }
+
+  return adjacent;
+}
+
+// assume obstacle always has top left as starting point
 function setObstacle(start, color) {
-  // assume obstacle always has top left as starting point
-  const CROSSS_SURFACE_MAP = {
-    1: 5,
-    5: 7,
-    7: 5,
-    3: 7,
-  };
   const { surface, row, col } = cubeMap[start];
   let right, down, diagonal;
   if (surface === 1 && col === 4) {
-    right = cubeArrays[CROSSS_SURFACE_MAP[surface]][0][4 - row];
+    right = getCrossSurfaceAdjecentTile(start);
     down = start + 15;
     diagonal = right - 1;
   } else if (surface === 5 && row === 4) {
     right = start + 1;
-    down = cubeArrays[CROSSS_SURFACE_MAP[surface]][col][row];
+    down = getCrossSurfaceAdjecentTile(start);
     diagonal = down + 15;
   } else if (surface === 7 && col === 4) {
-    right = cubeArrays[CROSSS_SURFACE_MAP[surface]][4][row];
+    right = getCrossSurfaceAdjecentTile(start);
     down = start + 15;
     diagonal = right + 1;
   } else if (surface === 3 && row === 4) {
     right = start + 1;
-    down = cubeArrays[CROSSS_SURFACE_MAP[surface]][4 - col][0];
+    down = getCrossSurfaceAdjecentTile(start);
     diagonal = down - 15;
   } else {
     right = start + 1;
@@ -272,23 +298,83 @@ class Player {
     this.goal = PLAYER_START_TILES[GOAL_MAP[id]];
     cubeMap[start].player = id;
   }
-  move(from, to) {
-    const tile = cubeMap[to];
-    if (!tile) throw "unknown place " + to;
-    const { obstacle, player } = tile;
-    if (obstacle) {
-      throw `can not move to ${to}. has obstacle.`;
+  move(next) {
+    const result = {
+      collideWithOtherPlayer: undefined,
+      win: false,
+    };
+    const nextTile = cubeMap[next];
+    if (!nextTile || !IN_PLAY_SURFACES.includes(nextTile.surface))
+      throw "MOVE_FAIL_UNKNOWN_TILE";
+    const currentTile = cubeMap[this.current];
+    if (next === this.current) throw "MOVE_FAIL_HAVE_TO_MOVE";
+    if (nextTile.obstacle) {
+      throw "MOVE_FAIL_OBSTACLE";
     }
-    if (Number.isInteger(player)) {
-      // handle collide with other player
-      return;
+    // can only move vertically or horizontally
+    if (
+      currentTile.col !== nextTile.col &&
+      currentTile.row !== nextTile.row &&
+      currentTile.surface === nextTile.surface
+    )
+      throw "MOVE_FAIL_NOT_ALLOW";
+
+    // handle crossing surface move
+    if (currentTile.surface !== nextTile.surface) {
+      if (
+        currentTile.surface !== 4 &&
+        nextTile.surface !== 4 &&
+        next !== getCrossSurfaceAdjecentTile(this.current)
+      ) {
+        throw "MOVE_FAIL_INVALID_CROSS_SURFACE";
+      } else if (
+        (currentTile.surface === 4 || nextTile.surface === 4) &&
+        Math.abs(next - this.current) !== 1 &&
+        Math.abs(next - this.current) !== 15
+      ) {
+        throw "MOVE_FAIL_INVALID_CROSS_SURFACE";
+      }
     }
-    cubeMap[to].player = this.id;
-    cubeMap[from].player = undefined;
-    if (to === this.goal) {
-      // handle reach goal
+    // handle same surface long distance move obstacle check
+    else if (checkObstacleInbetweenTile(this.current, next)) {
+      throw "MOVE_FAIL_OBSTACLE_INBETWEEN";
     }
+
+    if (Number.isInteger(nextTile.player)) {
+      result.collideWithOtherPlayer = nextTile.player;
+    }
+    if (next === this.goal) {
+      result.win = true;
+    }
+    this.current = next;
+    nextTile.player = this.id;
+    currentTile.player = undefined;
+    return result;
   }
 }
 
+function checkObstacleInbetweenTile(a, b) {
+  a = cubeMap[a];
+  b = cubeMap[b];
+  if ((a.col !== b.col && a.row !== b.row) || a.surface !== b.surface)
+    throw "can only check vertically or horizontally on same surface.";
+
+  if (a.col !== b.col) {
+    for (let i = Math.min(a.col, b.col); i < Math.abs(a.col - b.col); i++) {
+      if (cubeMap[cubeArrays[a.surface][a.row][i]].obstacle) return true;
+    }
+  } else {
+    for (let i = Math.min(a.row, b.row); i < Math.abs(a.row - b.row); i++) {
+      if (cubeMap[cubeArrays[a.surface][i][a.col]].obstacle) return true;
+    }
+  }
+
+  return false;
+}
+
 const players = PLAYER_START_TILES.map((t, i) => new Player(i, t));
+
+const p1 = players[0];
+const p2 = players[1];
+const p3 = players[2];
+const p4 = players[3];
