@@ -14,6 +14,12 @@ const EDGES = {
 };
 const OBSTACLE_TYPES = ["red", "blue", "yellow", "green", "purple"];
 const IN_PLAY_SURFACES = [1, 3, 4, 5, 7];
+const DIRECTIONS_PER_SURFACE = {
+  1: { row: 1 },
+  3: { col: 1 },
+  5: { col: -1 },
+  7: { row: -1 },
+};
 
 function getCubeArrays() {
   const subsBy5 = [[]];
@@ -93,7 +99,7 @@ const cubeMap = getCubeMap(cubeArrays);
 
 let tileCount = 1;
 
-function makeTile(left, top, isPlayArea, isStartTile, color) {
+function makeTile(left, top, isPlayArea, isStartTile, color, player) {
   const tile = document.createElement("div");
   tile.style.border = "1px dotted gray";
   tile.style.width = CUBE_WIDTH + "px";
@@ -105,10 +111,14 @@ function makeTile(left, top, isPlayArea, isStartTile, color) {
     tile.style.border = "1.5px solid skyblue";
   }
   if (isStartTile) {
-    tile.style.backgroundColor = "white";
+    tile.style.backgroundColor = "pink";
   }
   if (color) {
     tile.style.backgroundColor = color;
+  }
+  if (Number.isInteger(player)) {
+    tile.style.backgroundImage = "url('./space-ship-line.png')";
+    tile.style.backgroundSize = "cover";
   }
   tile.innerText = tileCount;
 
@@ -266,6 +276,7 @@ const obCount = setAllObstactles();
 console.log("obCount", obCount);
 
 function renderCube() {
+  wrapper.innerHTML = "";
   while (tileCount <= TILE_TOTAL) {
     const left = (tileCount % BOARD_WIDTH || BOARD_WIDTH) * CUBE_WIDTH + "px";
     const top = Math.ceil(tileCount / BOARD_WIDTH) * CUBE_WIDTH + "px";
@@ -274,11 +285,11 @@ function renderCube() {
       (tileCount > 75 && tileCount < 151);
     const obstacleColor = cubeMap[tileCount].obstacle;
     const isPlayerStart = PLAYER_START_TILES.includes(tileCount);
-    makeTile(left, top, isPlayArea, isPlayerStart, obstacleColor);
+    const player = cubeMap[tileCount].player;
+    makeTile(left, top, isPlayArea, isPlayerStart, obstacleColor, player);
   }
+  tileCount = 1;
 }
-
-renderCube();
 
 const GOAL_MAP = {
   0: 2,
@@ -292,6 +303,8 @@ class Player {
   current;
   collectedObstacles = [];
   goal;
+  direction = "top";
+
   constructor(id, start) {
     this.id = id;
     this.current = start;
@@ -307,7 +320,7 @@ class Player {
     if (!nextTile || !IN_PLAY_SURFACES.includes(nextTile.surface))
       throw "MOVE_FAIL_UNKNOWN_TILE";
     const currentTile = cubeMap[this.current];
-    if (next === this.current) throw "MOVE_FAIL_HAVE_TO_MOVE";
+    if (next === this.current) throw "MOVE_FAIL_SAME_TILE";
     if (nextTile.obstacle) {
       throw "MOVE_FAIL_OBSTACLE";
     }
@@ -336,7 +349,7 @@ class Player {
       }
     }
     // handle same surface long distance move obstacle check
-    else if (checkObstacleInbetweenTile(this.current, next)) {
+    else if (checkObstaclesInPath(this.current, next)) {
       throw "MOVE_FAIL_OBSTACLE_INBETWEEN";
     }
 
@@ -349,27 +362,61 @@ class Player {
     this.current = next;
     nextTile.player = this.id;
     currentTile.player = undefined;
+    renderCube();
+    return result;
+  }
+  getSurrendingObstacles() {
+    const result = {
+      top: null,
+      down: null,
+      left: null,
+      right: null,
+    };
+    const tile = cubeMap[this.current];
+
+    // detact all tiles on same surface
+    // row++, row--, col--, col++
+
+    // detact 1 adjacent tile in cross surface if in the edge
     return result;
   }
 }
 
-function checkObstacleInbetweenTile(a, b) {
-  a = cubeMap[a];
-  b = cubeMap[b];
-  if ((a.col !== b.col && a.row !== b.row) || a.surface !== b.surface)
-    throw "can only check vertically or horizontally on same surface.";
+// function getMoveDirection(point1, point2) {
+//   const dirs = ['up', 'down', 'left', 'right']
+//   const a = cubeMap[point1];
+//   const b = cubeMap[point2];
+
+//   if
+// }
+
+function checkObstaclesInPath(point1, point2) {
+  const a = cubeMap[point1];
+  const b = cubeMap[point2];
+
+  // cross surface check only look at 1 nearest tile
+  // will not return accurate result if point2 is not the nearest cross surface tile
+  // it is up to the caller to provide correct cross surface tile
+  if (a.surface !== b.surface) {
+    return b.obstacle;
+  }
+
+  if (a.col !== b.col && a.row !== b.row)
+    throw "can only check vertically or horizontally.";
 
   if (a.col !== b.col) {
-    for (let i = Math.min(a.col, b.col); i < Math.abs(a.col - b.col); i++) {
-      if (cubeMap[cubeArrays[a.surface][a.row][i]].obstacle) return true;
+    for (let i = Math.min(a.col, b.col); i <= Math.max(a.col, b.col); i++) {
+      const { obstacle } = cubeMap[cubeArrays[a.surface][a.row][i]];
+      if (obstacle) return obstacle;
     }
   } else {
-    for (let i = Math.min(a.row, b.row); i < Math.abs(a.row - b.row); i++) {
-      if (cubeMap[cubeArrays[a.surface][i][a.col]].obstacle) return true;
+    for (let i = Math.min(a.row, b.row); i <= Math.max(a.row, b.row); i++) {
+      const { obstacle } = cubeMap[cubeArrays[a.surface][i][a.col]];
+      if (obstacle) return obstacle;
     }
   }
 
-  return false;
+  return null;
 }
 
 const players = PLAYER_START_TILES.map((t, i) => new Player(i, t));
@@ -378,3 +425,5 @@ const p1 = players[0];
 const p2 = players[1];
 const p3 = players[2];
 const p4 = players[3];
+
+renderCube();
