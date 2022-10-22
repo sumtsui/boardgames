@@ -20,6 +20,17 @@ const DIRECTIONS_PER_SURFACE = {
   5: { col: -1 },
   7: { row: -1 },
 };
+const DIRECTIONS = [
+  { value: "down", degree: "180deg" },
+  { value: "left", degree: "-90deg" },
+  { value: "up", degree: "0deg" },
+  { value: "right", degree: "90deg" },
+];
+let p1;
+let p2;
+let p3;
+let p4;
+let players;
 
 function getCubeArrays() {
   const subsBy5 = [[]];
@@ -99,12 +110,11 @@ const cubeMap = getCubeMap(cubeArrays);
 
 let tileCount = 1;
 
-function makeTile(left, top, isPlayArea, isStartTile, color, player) {
+function makeTile(left, top, isPlayArea, isStartTile, color, playerId) {
   const tile = document.createElement("div");
-  tile.style.border = "1px dotted gray";
+  tile.className = "tile";
   tile.style.width = CUBE_WIDTH + "px";
   tile.style.height = CUBE_WIDTH + "px";
-  tile.style.position = "absolute";
   tile.style.left = left;
   tile.style.top = top;
   if (isPlayArea) {
@@ -116,12 +126,22 @@ function makeTile(left, top, isPlayArea, isStartTile, color, player) {
   if (color) {
     tile.style.backgroundColor = color;
   }
-  if (Number.isInteger(player)) {
-    tile.style.backgroundImage = "url('./space-ship-line.png')";
-    tile.style.backgroundSize = "cover";
-  }
-  tile.innerText = tileCount;
+  const num = document.createElement("div");
+  num.innerText = tileCount;
 
+  const wrap = document.createElement("div");
+  wrap.className = "wrap";
+  wrap.appendChild(num);
+  if (Number.isInteger(playerId)) {
+    const player = document.createElement("div");
+    player.classList.add("player");
+    player.style.transform = `rotate(${
+      DIRECTIONS.find((d) => d.value === players[playerId].direction).degree
+    })`;
+    wrap.appendChild(player);
+  }
+
+  tile.appendChild(wrap);
   tileCount++;
   wrapper.appendChild(tile);
 }
@@ -303,13 +323,14 @@ class Player {
   current;
   collectedObstacles = [];
   goal;
-  direction = "top";
+  direction;
 
-  constructor(id, start) {
+  constructor(id, start, direction) {
     this.id = id;
     this.current = start;
     this.goal = PLAYER_START_TILES[GOAL_MAP[id]];
     cubeMap[start].player = id;
+    this.direction = direction;
   }
   move(next) {
     const result = {
@@ -317,9 +338,12 @@ class Player {
       win: false,
     };
     const nextTile = cubeMap[next];
+
     if (!nextTile || !IN_PLAY_SURFACES.includes(nextTile.surface))
       throw "MOVE_FAIL_UNKNOWN_TILE";
+
     const currentTile = cubeMap[this.current];
+
     if (next === this.current) throw "MOVE_FAIL_SAME_TILE";
     if (nextTile.obstacle) {
       throw "MOVE_FAIL_OBSTACLE";
@@ -359,12 +383,31 @@ class Player {
     if (next === this.goal) {
       result.win = true;
     }
+    this.direction = this._detectDirectionChange(next) || this.direction;
     this.current = next;
     nextTile.player = this.id;
     currentTile.player = undefined;
     renderCube();
     return result;
   }
+  _detectDirectionChange(next) {
+    const { surface } = cubeMap[this.current];
+
+    if ((next - this.current) % 15 === 0) {
+      if (next > this.current) return "down";
+      else return "up";
+    } else if (Math.abs(next - this.current) <= 4) {
+      if (next > this.current) return "right";
+      else return "left";
+    } else {
+      if (surface === 1) return "down";
+      if (surface === 3) return "right";
+      if (surface === 5) return "left";
+      if (surface === 7) return "up";
+    }
+    throw "FAIL_DETACT_DIRECTION";
+  }
+  // move it to board class
   getSurrendingObstacles() {
     const result = {
       top: null,
@@ -419,11 +462,13 @@ function checkObstaclesInPath(point1, point2) {
   return null;
 }
 
-const players = PLAYER_START_TILES.map((t, i) => new Player(i, t));
+players = PLAYER_START_TILES.map(
+  (t, i) => new Player(i, t, DIRECTIONS[i].value)
+);
 
-const p1 = players[0];
-const p2 = players[1];
-const p3 = players[2];
-const p4 = players[3];
+p1 = players[0];
+p2 = players[1];
+p3 = players[2];
+p4 = players[3];
 
 renderCube();

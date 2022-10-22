@@ -8,3 +8,20 @@ body {
   position: relative;
   margin-left: 5px;
 }
+.tile {
+  position: absolute;
+  border: "1px dotted gray";
+}
+.tile .wrap {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+.player {
+  background-image: url(./space-ship-line.png);
+  background-size: cover;
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  top: 0;
+}
