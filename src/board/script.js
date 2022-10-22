@@ -1,4 +1,3 @@
-const wrapper = document.querySelector(".wrapper");
 const CUBE_WIDTH = 60;
 const BOARD_WIDTH = 15;
 const TILE_TOTAL = 225;
@@ -32,293 +31,270 @@ let p3;
 let p4;
 let players;
 
-function getCubeArrays() {
-  const subsBy5 = [[]];
-  let curSubArr = 0;
-
-  let i = 1;
-  while (i <= TILE_TOTAL) {
-    if (curSubArr === 5) {
-      subsBy5.push([i]);
-      curSubArr = 1;
-      i++;
-    } else {
-      subsBy5.slice(-1)[0].push(i);
-      curSubArr++;
-      i++;
-    }
+class Board {
+  cubeArrays;
+  cubeMap;
+  constructor() {
+    this.cubeArrays = this._getCubeArrays();
+    this.cubeMap = this._getCubeMap(this.cubeArrays);
   }
-
-  const result = [[], [], []];
-  curSubArr = 0;
-  let round = 0;
-  i = 0;
-
-  while (i < subsBy5.length) {
-    if (curSubArr === 3) curSubArr = 0;
-
-    if (result[curSubArr + round].length < 5) {
-      result[curSubArr + round].push(subsBy5[i]);
+  /**
+   ** assume obstacle always has top left as starting point
+   **/
+  setObstacle(start, color) {
+    const { surface, row, col } = this.cubeMap[start];
+    let right, down, diagonal;
+    if (surface === 1 && col === 4) {
+      right = this.getCrossSurfaceAdjecentTile(start);
+      down = start + 15;
+      diagonal = right - 1;
+    } else if (surface === 5 && row === 4) {
+      right = start + 1;
+      down = this.getCrossSurfaceAdjecentTile(start);
+      diagonal = down + 15;
+    } else if (surface === 7 && col === 4) {
+      right = this.getCrossSurfaceAdjecentTile(start);
+      down = start + 15;
+      diagonal = right + 1;
+    } else if (surface === 3 && row === 4) {
+      right = start + 1;
+      down = this.getCrossSurfaceAdjecentTile(start);
+      diagonal = down - 15;
+    } else {
+      right = start + 1;
+      down = start + 15;
+      diagonal = start + 15 + 1;
     }
 
     if (
-      result[curSubArr + round].length === 5 &&
-      curSubArr === 2 &&
-      i < subsBy5.length - 1
+      this.cubeMap[start]?.obstacle ||
+      this.cubeMap[start - 1]?.obstacle ||
+      this.cubeMap[start - 15]?.obstacle ||
+      this.cubeMap[right]?.obstacle ||
+      this.cubeMap[right + 1]?.obstacle ||
+      this.cubeMap[down]?.obstacle ||
+      this.cubeMap[down + 15]?.obstacle ||
+      this.cubeMap[diagonal]?.obstacle ||
+      this.cubeMap[diagonal + 1]?.obstacle ||
+      this.cubeMap[diagonal + 15]?.obstacle ||
+      PLAYER_START_TILES.includes(right) ||
+      PLAYER_START_TILES.includes(down) ||
+      PLAYER_START_TILES.includes(diagonal)
     ) {
-      round += 3;
-      result.push([], [], []);
+      throw "OBSTACLE_CREATE_FAIL";
     }
 
-    curSubArr++;
-    i++;
+    this.cubeMap[start].obstacle = color;
+    this.cubeMap[right].obstacle = color;
+    this.cubeMap[down].obstacle = color;
+    this.cubeMap[diagonal].obstacle = color;
+
+    return [start, right, down, diagonal];
   }
+  setAllObstactles() {
+    const tiles = Array(TILE_TOTAL)
+      .fill()
+      .map((_, i) => i + 1)
+      .filter((i) => {
+        const start = this.cubeMap[i];
+        if (
+          !PLAYER_START_TILES.includes(i) &&
+          IN_PLAY_SURFACES.includes(start.surface) &&
+          !CORNERS.includes(i) &&
+          EDGES[start.surface]?.row !== start.row &&
+          EDGES[start.surface]?.col !== start.col
+        ) {
+          return i;
+        }
+      });
+    const tilesMap = tiles.reduce(
+      (accu, cur, idx) => ({ ...accu, [cur]: idx }),
+      {}
+    );
+    const obstaclePerSurfaceCount = {};
+    const OBSTACLE_TOTAL = 12;
+    const ATTEMPT_TOTAL = 200;
 
-  return result;
-}
+    let obstacleCount = 0;
+    let attempt = 0;
+    let curColorIdx = 0;
 
-const cubeArrays = getCubeArrays();
+    while (obstacleCount < OBSTACLE_TOTAL && attempt < ATTEMPT_TOTAL) {
+      attempt++;
+      const idx = Math.floor(tiles.length * Math.random());
+      const start = tiles[idx];
 
-function getCubeMap(_cubeArrays) {
-  const result = {};
-  let i = 0;
-  while (i < _cubeArrays.length) {
-    const surface = _cubeArrays[i];
-    let j = 0;
-    while (j < surface.length) {
-      const row = surface[j];
-      let k = 0;
-      while (k < row.length) {
-        result[row[k]] = {
-          surface: i,
-          row: j,
-          col: k,
-          obstacle: null,
-          player: null,
-        };
-        k++;
+      try {
+        const startCountOnSurface =
+          obstaclePerSurfaceCount[this.cubeMap[start].surface];
+        if (
+          startCountOnSurface >= Math.ceil(OBSTACLE_TOTAL / 5) ||
+          (this.cubeMap[start].surface === 4 && startCountOnSurface === 2)
+        ) {
+          throw "enough obstacle in surface " + this.cubeMap[start].surface;
+        }
+        const color = OBSTACLE_TYPES[curColorIdx % OBSTACLE_TYPES.length];
+        const newObstacle = this.setObstacle(start, color);
+        newObstacle.forEach((i) => tiles.splice(tilesMap[i], 1));
+
+        obstaclePerSurfaceCount[this.cubeMap[start].surface] =
+          startCountOnSurface ? startCountOnSurface + 1 : 1;
+        obstacleCount++;
+        curColorIdx++;
+      } catch (err) {
+        console.log(err, idx, start);
       }
-      j++;
     }
-    i++;
+
+    console.log("obstaclePerSurfaceCount", obstaclePerSurfaceCount);
+
+    return { obstacleCount, attempt };
   }
-
-  return result;
-}
-
-const cubeMap = getCubeMap(cubeArrays);
-
-let tileCount = 1;
-
-function makeTile(left, top, isPlayArea, isStartTile, color, playerId) {
-  const tile = document.createElement("div");
-  tile.className = "tile";
-  tile.style.width = CUBE_WIDTH + "px";
-  tile.style.height = CUBE_WIDTH + "px";
-  tile.style.left = left;
-  tile.style.top = top;
-  if (isPlayArea) {
-    tile.style.border = "1.5px solid skyblue";
-  }
-  if (isStartTile) {
-    tile.style.backgroundColor = "pink";
-  }
-  if (color) {
-    tile.style.backgroundColor = color;
-  }
-  const num = document.createElement("div");
-  num.innerText = tileCount;
-
-  const wrap = document.createElement("div");
-  wrap.className = "wrap";
-  wrap.appendChild(num);
-  if (Number.isInteger(playerId)) {
-    const player = document.createElement("div");
-    player.classList.add("player");
-    player.style.transform = `rotate(${
-      DIRECTIONS.find((d) => d.value === players[playerId].direction).degree
-    })`;
-    wrap.appendChild(player);
-  }
-
-  tile.appendChild(wrap);
-  tileCount++;
-  wrapper.appendChild(tile);
-}
-
-function getCrossSurfaceAdjecentTile(tile) {
-  const { surface, row, col } = cubeMap[tile];
-  let adjacent;
-  if (surface === 1) {
-    if (col === 4) {
-      adjacent = cubeArrays[5][0][4 - row];
-    } else if (col === 0) {
-      adjacent = cubeArrays[3][0][row];
+  getCrossSurfaceAdjecentTile(tile) {
+    const { surface, row, col } = this.cubeMap[tile];
+    let adjacent;
+    if (surface === 1) {
+      if (col === 4) {
+        adjacent = cubeArrays[5][0][4 - row];
+      } else if (col === 0) {
+        adjacent = cubeArrays[3][0][row];
+      }
+    } else if (surface === 5) {
+      if (row === 4) {
+        adjacent = cubeArrays[7][col][row];
+      } else if (row === 0) {
+        adjacent = cubeArrays[1][4 - col][4];
+      }
+    } else if (surface === 7) {
+      if (col === 4) {
+        adjacent = cubeArrays[5][4][row];
+      } else if (col === 0) {
+        adjacent = cubeArrays[3][4][4 - row];
+      }
+    } else if (surface === 3) {
+      if (row === 4) {
+        adjacent = cubeArrays[7][4 - col][0];
+      } else if (row === 0) {
+        adjacent = cubeArrays[1][col][0];
+      }
     }
-  } else if (surface === 5) {
-    if (row === 4) {
-      adjacent = cubeArrays[7][col][row];
-    } else if (row === 0) {
-      adjacent = cubeArrays[1][4 - col][4];
-    }
-  } else if (surface === 7) {
-    if (col === 4) {
-      adjacent = cubeArrays[5][4][row];
-    } else if (col === 0) {
-      adjacent = cubeArrays[3][4][4 - row];
-    }
-  } else if (surface === 3) {
-    if (row === 4) {
-      adjacent = cubeArrays[7][4 - col][0];
-    } else if (row === 0) {
-      adjacent = cubeArrays[1][col][0];
-    }
+
+    return adjacent;
   }
+  checkObstaclesInPath(point1, point2) {
+    const a = this.cubeMap[point1];
+    const b = this.cubeMap[point2];
 
-  return adjacent;
-}
+    // cross surface check only look at 1 nearest tile
+    // will not return accurate result if point2 is not the nearest cross surface tile
+    // it is up to the caller to provide correct cross surface tile
+    if (a.surface !== b.surface) {
+      return b.obstacle;
+    }
 
-// assume obstacle always has top left as starting point
-function setObstacle(start, color) {
-  const { surface, row, col } = cubeMap[start];
-  let right, down, diagonal;
-  if (surface === 1 && col === 4) {
-    right = getCrossSurfaceAdjecentTile(start);
-    down = start + 15;
-    diagonal = right - 1;
-  } else if (surface === 5 && row === 4) {
-    right = start + 1;
-    down = getCrossSurfaceAdjecentTile(start);
-    diagonal = down + 15;
-  } else if (surface === 7 && col === 4) {
-    right = getCrossSurfaceAdjecentTile(start);
-    down = start + 15;
-    diagonal = right + 1;
-  } else if (surface === 3 && row === 4) {
-    right = start + 1;
-    down = getCrossSurfaceAdjecentTile(start);
-    diagonal = down - 15;
-  } else {
-    right = start + 1;
-    down = start + 15;
-    diagonal = start + 15 + 1;
+    if (a.col !== b.col && a.row !== b.row)
+      throw "can only check vertically or horizontally.";
+
+    if (a.col !== b.col) {
+      for (let i = Math.min(a.col, b.col); i <= Math.max(a.col, b.col); i++) {
+        const { obstacle } = this.cubeMap[cubeArrays[a.surface][a.row][i]];
+        if (obstacle) return obstacle;
+      }
+    } else {
+      for (let i = Math.min(a.row, b.row); i <= Math.max(a.row, b.row); i++) {
+        const { obstacle } = this.cubeMap[cubeArrays[a.surface][i][a.col]];
+        if (obstacle) return obstacle;
+      }
+    }
+
+    return null;
   }
+  _getCubeArrays() {
+    const subsBy5 = [[]];
+    let curSubArr = 0;
 
-  if (
-    cubeMap[start]?.obstacle ||
-    cubeMap[start - 1]?.obstacle ||
-    cubeMap[start - 15]?.obstacle ||
-    cubeMap[right]?.obstacle ||
-    cubeMap[right + 1]?.obstacle ||
-    cubeMap[down]?.obstacle ||
-    cubeMap[down + 15]?.obstacle ||
-    cubeMap[diagonal]?.obstacle ||
-    cubeMap[diagonal + 1]?.obstacle ||
-    cubeMap[diagonal + 15]?.obstacle ||
-    PLAYER_START_TILES.includes(right) ||
-    PLAYER_START_TILES.includes(down) ||
-    PLAYER_START_TILES.includes(diagonal)
-  ) {
-    throw "OBSTACLE_CREATE_FAIL";
-  }
+    let i = 1;
+    while (i <= TILE_TOTAL) {
+      if (curSubArr === 5) {
+        subsBy5.push([i]);
+        curSubArr = 1;
+        i++;
+      } else {
+        subsBy5.slice(-1)[0].push(i);
+        curSubArr++;
+        i++;
+      }
+    }
 
-  cubeMap[start].obstacle = color;
-  cubeMap[right].obstacle = color;
-  cubeMap[down].obstacle = color;
-  cubeMap[diagonal].obstacle = color;
+    const result = [[], [], []];
+    curSubArr = 0;
+    let round = 0;
+    i = 0;
 
-  return [start, right, down, diagonal];
-}
+    while (i < subsBy5.length) {
+      if (curSubArr === 3) curSubArr = 0;
 
-function setAllObstactles() {
-  const tiles = Array(TILE_TOTAL)
-    .fill()
-    .map((_, i) => i + 1)
-    .filter((i) => {
-      const start = cubeMap[i];
+      if (result[curSubArr + round].length < 5) {
+        result[curSubArr + round].push(subsBy5[i]);
+      }
+
       if (
-        !PLAYER_START_TILES.includes(i) &&
-        IN_PLAY_SURFACES.includes(start.surface) &&
-        !CORNERS.includes(i) &&
-        EDGES[start.surface]?.row !== start.row &&
-        EDGES[start.surface]?.col !== start.col
+        result[curSubArr + round].length === 5 &&
+        curSubArr === 2 &&
+        i < subsBy5.length - 1
       ) {
-        return i;
+        round += 3;
+        result.push([], [], []);
       }
-    });
-  const tilesMap = tiles.reduce(
-    (accu, cur, idx) => ({ ...accu, [cur]: idx }),
-    {}
-  );
-  const obstaclePerSurfaceCount = {};
-  const OBSTACLE_TOTAL = 12;
-  const ATTEMPT_TOTAL = 200;
 
-  let obstacleCount = 0;
-  let attempt = 0;
-  let curColorIdx = 0;
-
-  while (obstacleCount < OBSTACLE_TOTAL && attempt < ATTEMPT_TOTAL) {
-    attempt++;
-    const idx = Math.floor(tiles.length * Math.random());
-    const start = tiles[idx];
-
-    try {
-      const startCountOnSurface =
-        obstaclePerSurfaceCount[cubeMap[start].surface];
-      if (
-        startCountOnSurface >= Math.ceil(OBSTACLE_TOTAL / 5) ||
-        (cubeMap[start].surface === 4 && startCountOnSurface === 2)
-      ) {
-        throw "enough obstacle in surface " + cubeMap[start].surface;
-      }
-      const color = OBSTACLE_TYPES[curColorIdx % OBSTACLE_TYPES.length];
-      const newObstacle = setObstacle(start, color);
-      newObstacle.forEach((i) => tiles.splice(tilesMap[i], 1));
-
-      obstaclePerSurfaceCount[cubeMap[start].surface] = startCountOnSurface
-        ? startCountOnSurface + 1
-        : 1;
-      obstacleCount++;
-      curColorIdx++;
-    } catch (err) {
-      console.log(err, idx, start);
+      curSubArr++;
+      i++;
     }
+
+    return result;
   }
+  _getCubeMap(_cubeArrays) {
+    const result = {};
+    let i = 0;
+    while (i < _cubeArrays.length) {
+      const surface = _cubeArrays[i];
+      let j = 0;
+      while (j < surface.length) {
+        const row = surface[j];
+        let k = 0;
+        while (k < row.length) {
+          result[row[k]] = {
+            surface: i,
+            row: j,
+            col: k,
+            obstacle: null,
+            player: null,
+          };
+          k++;
+        }
+        j++;
+      }
+      i++;
+    }
 
-  console.log("obstaclePerSurfaceCount", obstaclePerSurfaceCount);
-
-  return { obstacleCount, attempt };
+    return result;
+  }
 }
 
-const obCount = setAllObstactles();
-
+const board = new Board();
+const obCount = board.setAllObstactles();
+const cubeMap = board.cubeMap;
+const cubeArrays = board.cubeArrays;
 console.log("obCount", obCount);
 
-function renderCube() {
-  wrapper.innerHTML = "";
-  while (tileCount <= TILE_TOTAL) {
-    const left = (tileCount % BOARD_WIDTH || BOARD_WIDTH) * CUBE_WIDTH + "px";
-    const top = Math.ceil(tileCount / BOARD_WIDTH) * CUBE_WIDTH + "px";
-    const isPlayArea =
-      (tileCount % BOARD_WIDTH > 5 && tileCount % BOARD_WIDTH < 11) ||
-      (tileCount > 75 && tileCount < 151);
-    const obstacleColor = cubeMap[tileCount].obstacle;
-    const isPlayerStart = PLAYER_START_TILES.includes(tileCount);
-    const player = cubeMap[tileCount].player;
-    makeTile(left, top, isPlayArea, isPlayerStart, obstacleColor, player);
-  }
-  tileCount = 1;
-}
-
-const GOAL_MAP = {
-  0: 2,
-  1: 3,
-  2: 0,
-  3: 1,
-};
-
 class Player {
+  static GOAL_MAP = {
+    0: 2,
+    1: 3,
+    2: 0,
+    3: 1,
+  };
+
   id;
   current;
   collectedObstacles = [];
@@ -328,7 +304,7 @@ class Player {
   constructor(id, start, direction) {
     this.id = id;
     this.current = start;
-    this.goal = PLAYER_START_TILES[GOAL_MAP[id]];
+    this.goal = PLAYER_START_TILES[Player.GOAL_MAP[id]];
     cubeMap[start].player = id;
     this.direction = direction;
   }
@@ -361,7 +337,7 @@ class Player {
       if (
         currentTile.surface !== 4 &&
         nextTile.surface !== 4 &&
-        next !== getCrossSurfaceAdjecentTile(this.current)
+        next !== board.getCrossSurfaceAdjecentTile(this.current)
       ) {
         throw "MOVE_FAIL_INVALID_CROSS_SURFACE";
       } else if (
@@ -373,7 +349,7 @@ class Player {
       }
     }
     // handle same surface long distance move obstacle check
-    else if (checkObstaclesInPath(this.current, next)) {
+    else if (board.checkObstaclesInPath(this.current, next)) {
       throw "MOVE_FAIL_OBSTACLE_INBETWEEN";
     }
 
@@ -425,43 +401,6 @@ class Player {
   }
 }
 
-// function getMoveDirection(point1, point2) {
-//   const dirs = ['up', 'down', 'left', 'right']
-//   const a = cubeMap[point1];
-//   const b = cubeMap[point2];
-
-//   if
-// }
-
-function checkObstaclesInPath(point1, point2) {
-  const a = cubeMap[point1];
-  const b = cubeMap[point2];
-
-  // cross surface check only look at 1 nearest tile
-  // will not return accurate result if point2 is not the nearest cross surface tile
-  // it is up to the caller to provide correct cross surface tile
-  if (a.surface !== b.surface) {
-    return b.obstacle;
-  }
-
-  if (a.col !== b.col && a.row !== b.row)
-    throw "can only check vertically or horizontally.";
-
-  if (a.col !== b.col) {
-    for (let i = Math.min(a.col, b.col); i <= Math.max(a.col, b.col); i++) {
-      const { obstacle } = cubeMap[cubeArrays[a.surface][a.row][i]];
-      if (obstacle) return obstacle;
-    }
-  } else {
-    for (let i = Math.min(a.row, b.row); i <= Math.max(a.row, b.row); i++) {
-      const { obstacle } = cubeMap[cubeArrays[a.surface][i][a.col]];
-      if (obstacle) return obstacle;
-    }
-  }
-
-  return null;
-}
-
 players = PLAYER_START_TILES.map(
   (t, i) => new Player(i, t, DIRECTIONS[i].value)
 );
@@ -470,5 +409,58 @@ p1 = players[0];
 p2 = players[1];
 p3 = players[2];
 p4 = players[3];
+
+let tileCount = 1;
+const wrapper = document.querySelector(".wrapper");
+function makeTile(left, top, isPlayArea, isStartTile, color, playerId) {
+  const tile = document.createElement("div");
+  tile.className = "tile";
+  tile.style.width = CUBE_WIDTH + "px";
+  tile.style.height = CUBE_WIDTH + "px";
+  tile.style.left = left;
+  tile.style.top = top;
+  if (isPlayArea) {
+    tile.style.border = "1.5px solid skyblue";
+  }
+  if (isStartTile) {
+    tile.style.backgroundColor = "pink";
+  }
+  if (color) {
+    tile.style.backgroundColor = color;
+  }
+  const num = document.createElement("div");
+  num.innerText = tileCount;
+
+  const wrap = document.createElement("div");
+  wrap.className = "wrap";
+  wrap.appendChild(num);
+  if (Number.isInteger(playerId)) {
+    const player = document.createElement("div");
+    player.classList.add("player");
+    player.style.transform = `rotate(${
+      DIRECTIONS.find((d) => d.value === players[playerId].direction).degree
+    })`;
+    wrap.appendChild(player);
+  }
+
+  tile.appendChild(wrap);
+  tileCount++;
+  wrapper.appendChild(tile);
+}
+function renderCube() {
+  wrapper.innerHTML = "";
+  while (tileCount <= TILE_TOTAL) {
+    const left = (tileCount % BOARD_WIDTH || BOARD_WIDTH) * CUBE_WIDTH + "px";
+    const top = Math.ceil(tileCount / BOARD_WIDTH) * CUBE_WIDTH + "px";
+    const isPlayArea =
+      (tileCount % BOARD_WIDTH > 5 && tileCount % BOARD_WIDTH < 11) ||
+      (tileCount > 75 && tileCount < 151);
+    const obstacleColor = board.cubeMap[tileCount].obstacle;
+    const isPlayerStart = PLAYER_START_TILES.includes(tileCount);
+    const player = board.cubeMap[tileCount].player;
+    makeTile(left, top, isPlayArea, isPlayerStart, obstacleColor, player);
+  }
+  tileCount = 1;
+}
 
 renderCube();
