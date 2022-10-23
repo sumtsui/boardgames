@@ -316,6 +316,26 @@ class Player {
     2: 0,
     3: 1,
   };
+  static DIRECTION_MAP = {
+    down: {
+      up: "down",
+      left: "right",
+      right: "left",
+      down: "up",
+    },
+    left: {
+      up: "left",
+      left: "down",
+      right: "up",
+      down: "right",
+    },
+    right: {
+      up: "right",
+      left: "up",
+      right: "down",
+      down: "left",
+    },
+  };
   id;
   current;
   collectedObstacles = [];
@@ -409,7 +429,17 @@ class Player {
     }
     throw "FAIL_DETACT_DIRECTION";
   }
-  getSurrendingThings() {
+  getSurrounding() {
+    const sur = this._getRawSurrounding();
+    if (this.direction === "up") return sur;
+    const dirMap = Player.DIRECTION_MAP[this.direction];
+    const tempSur = { ...sur };
+    for (let key in sur) {
+      sur[key] = tempSur[dirMap[key]];
+    }
+    return sur;
+  }
+  _getRawSurrounding() {
     // absolute directions based on 2D cubeMap
     const result = {
       up: null,
