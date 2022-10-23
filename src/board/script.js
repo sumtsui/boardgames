@@ -25,11 +25,6 @@ const DIRECTIONS = [
   { value: "up", degree: "0deg" },
   { value: "right", degree: "90deg" },
 ];
-let p1;
-let p2;
-let p3;
-let p4;
-let players;
 
 class Board {
   cubeArrays;
@@ -155,55 +150,81 @@ class Board {
     let adjacent;
     if (surface === 1) {
       if (col === 4) {
-        adjacent = cubeArrays[5][0][4 - row];
+        adjacent = this.cubeArrays[5][0][4 - row];
       } else if (col === 0) {
-        adjacent = cubeArrays[3][0][row];
+        adjacent = this.cubeArrays[3][0][row];
       }
     } else if (surface === 5) {
       if (row === 4) {
-        adjacent = cubeArrays[7][col][row];
+        adjacent = this.cubeArrays[7][col][row];
       } else if (row === 0) {
-        adjacent = cubeArrays[1][4 - col][4];
+        adjacent = this.cubeArrays[1][4 - col][4];
       }
     } else if (surface === 7) {
       if (col === 4) {
-        adjacent = cubeArrays[5][4][row];
+        adjacent = this.cubeArrays[5][4][row];
       } else if (col === 0) {
-        adjacent = cubeArrays[3][4][4 - row];
+        adjacent = this.cubeArrays[3][4][4 - row];
       }
     } else if (surface === 3) {
       if (row === 4) {
-        adjacent = cubeArrays[7][4 - col][0];
+        adjacent = this.cubeArrays[7][4 - col][0];
       } else if (row === 0) {
-        adjacent = cubeArrays[1][col][0];
+        adjacent = this.cubeArrays[1][col][0];
       }
     }
 
     return adjacent;
   }
-  checkObstaclesInPath(point1, point2) {
-    const a = this.cubeMap[point1];
-    const b = this.cubeMap[point2];
+  getThingsInPath(start, end) {
+    const a = Number.isInteger(start) ? this.cubeMap[start] : start;
+    const b = Number.isInteger(end) ? this.cubeMap[end] : end;
+
+    if (!a || !b) return null;
 
     // cross surface check only look at 1 nearest tile
     // will not return accurate result if point2 is not the nearest cross surface tile
     // it is up to the caller to provide correct cross surface tile
     if (a.surface !== b.surface) {
-      return b.obstacle;
+      const { obstacle, player } = b;
+      if (obstacle) return { obstacle };
+      if (player) return { player };
     }
 
     if (a.col !== b.col && a.row !== b.row)
       throw "can only check vertically or horizontally.";
 
     if (a.col !== b.col) {
-      for (let i = Math.min(a.col, b.col); i <= Math.max(a.col, b.col); i++) {
-        const { obstacle } = this.cubeMap[cubeArrays[a.surface][a.row][i]];
-        if (obstacle) return obstacle;
+      if (a.col < b.col) {
+        for (let i = a.col + 1; i <= b.col; i++) {
+          const { obstacle, player } =
+            this.cubeMap[cubeArrays[a.surface][a.row][i]];
+          if (obstacle) return { obstacle };
+          if (player) return { player };
+        }
+      } else {
+        for (let i = a.col - 1; i >= b.col; i--) {
+          const { obstacle, player } =
+            this.cubeMap[cubeArrays[a.surface][a.row][i]];
+          if (obstacle) return { obstacle };
+          if (player) return { player };
+        }
       }
     } else {
-      for (let i = Math.min(a.row, b.row); i <= Math.max(a.row, b.row); i++) {
-        const { obstacle } = this.cubeMap[cubeArrays[a.surface][i][a.col]];
-        if (obstacle) return obstacle;
+      if (a.row < b.row) {
+        for (let i = a.row + 1; i <= b.row; i++) {
+          const { obstacle, player } =
+            this.cubeMap[cubeArrays[a.surface][i][a.col]];
+          if (obstacle) return { obstacle };
+          if (player) return { player };
+        }
+      } else {
+        for (let i = a.row - 1; i >= b.row; i--) {
+          const { obstacle, player } =
+            this.cubeMap[cubeArrays[a.surface][i][a.col]];
+          if (obstacle) return { obstacle };
+          if (player) return { player };
+        }
       }
     }
 
@@ -294,7 +315,6 @@ class Player {
     2: 0,
     3: 1,
   };
-
   id;
   current;
   collectedObstacles = [];
@@ -302,10 +322,10 @@ class Player {
   direction;
 
   constructor(id, start, direction) {
-    this.id = id;
+    this.id = id.toString();
     this.current = start;
     this.goal = PLAYER_START_TILES[Player.GOAL_MAP[id]];
-    cubeMap[start].player = id;
+    cubeMap[start].player = this.id;
     this.direction = direction;
   }
   move(next) {
@@ -349,11 +369,16 @@ class Player {
       }
     }
     // handle same surface long distance move obstacle check
-    else if (board.checkObstaclesInPath(this.current, next)) {
-      throw "MOVE_FAIL_OBSTACLE_INBETWEEN";
+    else {
+      const thingInPath = board.getThingsInPath(this.current, next);
+      if (thingInPath?.obstacle) throw "MOVE_FAIL_OBSTACLE_INBETWEEN";
+      if (thingInPath?.player) {
+        // todo: handle crash into other player
+        throw "MOVE_FAIL_PLAYER_INBETWEEN";
+      }
     }
 
-    if (Number.isInteger(nextTile.player)) {
+    if (nextTile.player) {
       result.collideWithOtherPlayer = nextTile.player;
     }
     if (next === this.goal) {
@@ -383,32 +408,33 @@ class Player {
     }
     throw "FAIL_DETACT_DIRECTION";
   }
-  // move it to board class
-  getSurrendingObstacles() {
+  getSurrendingThings() {
+    // absolute directions based on 2D cubeMap
     const result = {
-      top: null,
+      up: null,
       down: null,
       left: null,
       right: null,
     };
-    const tile = cubeMap[this.current];
+    const start = cubeMap[this.current];
 
-    // detact all tiles on same surface
-    // row++, row--, col--, col++
+    result.up = board.getThingsInPath(start, { ...start, row: 0 });
+    result.down = board.getThingsInPath(start, { ...start, row: 4 });
+    result.left = board.getThingsInPath(start, { ...start, col: 0 });
+    result.right = board.getThingsInPath(start, { ...start, col: 4 });
 
-    // detact 1 adjacent tile in cross surface if in the edge
     return result;
   }
 }
 
-players = PLAYER_START_TILES.map(
+const players = PLAYER_START_TILES.map(
   (t, i) => new Player(i, t, DIRECTIONS[i].value)
 );
 
-p1 = players[0];
-p2 = players[1];
-p3 = players[2];
-p4 = players[3];
+const p1 = players[0];
+const p2 = players[1];
+const p3 = players[2];
+const p4 = players[3];
 
 let tileCount = 1;
 const wrapper = document.querySelector(".wrapper");
@@ -434,7 +460,7 @@ function makeTile(left, top, isPlayArea, isStartTile, color, playerId) {
   const wrap = document.createElement("div");
   wrap.className = "wrap";
   wrap.appendChild(num);
-  if (Number.isInteger(playerId)) {
+  if (playerId) {
     const player = document.createElement("div");
     player.classList.add("player");
     player.style.transform = `rotate(${
