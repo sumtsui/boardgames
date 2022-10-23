@@ -2,23 +2,8 @@ const CUBE_WIDTH = 60;
 const BOARD_WIDTH = 15;
 const TILE_TOTAL = 225;
 const PLAYER_START_TILES = [38, 118, 188, 108];
-const CORNERS = [70, 145, 140];
-const EDGES = {
-  5: {
-    col: 4,
-  },
-  7: {
-    row: 4,
-  },
-};
 const OBSTACLE_TYPES = ["red", "blue", "yellow", "green", "purple"];
 const IN_PLAY_SURFACES = [1, 3, 4, 5, 7];
-const DIRECTIONS_PER_SURFACE = {
-  1: { row: 1 },
-  3: { col: 1 },
-  5: { col: -1 },
-  7: { row: -1 },
-};
 const DIRECTIONS = [
   { value: "down", degree: "180deg" },
   { value: "left", degree: "-90deg" },
@@ -87,6 +72,15 @@ class Board {
     return [start, right, down, diagonal];
   }
   setAllObstactles() {
+    const EDGES = {
+      5: {
+        col: 4,
+      },
+      7: {
+        row: 4,
+      },
+    };
+    const CORNERS = [70, 145, 140];
     const tiles = Array(TILE_TOTAL)
       .fill()
       .map((_, i) => i + 1)
@@ -176,6 +170,7 @@ class Board {
 
     return adjacent;
   }
+  // it is up to the caller to provide start and end that actually inline
   getThingsInPath(start, end) {
     const a = Number.isInteger(start) ? this.cubeMap[start] : start;
     const b = Number.isInteger(end) ? this.cubeMap[end] : end;
@@ -194,36 +189,42 @@ class Board {
     if (a.col !== b.col && a.row !== b.row)
       throw "can only check vertically or horizontally.";
 
+    // horizontal check
     if (a.col !== b.col) {
       if (a.col < b.col) {
+        // check right
         for (let i = a.col + 1; i <= b.col; i++) {
           const { obstacle, player } =
             this.cubeMap[cubeArrays[a.surface][a.row][i]];
-          if (obstacle) return { obstacle };
-          if (player) return { player };
+          if (obstacle) return { obstacle, distance: i - a.col };
+          if (player) return { player, distance: i - a.col };
         }
       } else {
+        // check left
         for (let i = a.col - 1; i >= b.col; i--) {
           const { obstacle, player } =
             this.cubeMap[cubeArrays[a.surface][a.row][i]];
-          if (obstacle) return { obstacle };
-          if (player) return { player };
+          if (obstacle) return { obstacle, distance: a.col - i };
+          if (player) return { player, distance: a.col - i };
         }
       }
     } else {
+      // vertical check
       if (a.row < b.row) {
+        // check down
         for (let i = a.row + 1; i <= b.row; i++) {
           const { obstacle, player } =
             this.cubeMap[cubeArrays[a.surface][i][a.col]];
-          if (obstacle) return { obstacle };
-          if (player) return { player };
+          if (obstacle) return { obstacle, distance: i - a.row };
+          if (player) return { player, distance: i - a.row };
         }
       } else {
+        // check up
         for (let i = a.row - 1; i >= b.row; i--) {
           const { obstacle, player } =
             this.cubeMap[cubeArrays[a.surface][i][a.col]];
-          if (obstacle) return { obstacle };
-          if (player) return { player };
+          if (obstacle) return { obstacle, distance: a.row - i };
+          if (player) return { player, distance: a.row - i };
         }
       }
     }
@@ -384,14 +385,14 @@ class Player {
     if (next === this.goal) {
       result.win = true;
     }
-    this.direction = this._detectDirectionChange(next) || this.direction;
+    this.direction = this._getDirectionChange(next) || this.direction;
     this.current = next;
     nextTile.player = this.id;
     currentTile.player = undefined;
     renderCube();
     return result;
   }
-  _detectDirectionChange(next) {
+  _getDirectionChange(next) {
     const { surface } = cubeMap[this.current];
 
     if ((next - this.current) % 15 === 0) {
@@ -416,12 +417,35 @@ class Player {
       left: null,
       right: null,
     };
-    const start = cubeMap[this.current];
+    const current = cubeMap[this.current];
 
-    result.up = board.getThingsInPath(start, { ...start, row: 0 });
-    result.down = board.getThingsInPath(start, { ...start, row: 4 });
-    result.left = board.getThingsInPath(start, { ...start, col: 0 });
-    result.right = board.getThingsInPath(start, { ...start, col: 4 });
+    result.up =
+      current.row === 0
+        ? "edge"
+        : board.getThingsInPath(current, { ...current, row: 0 });
+    result.down =
+      current.row === 4
+        ? "edge"
+        : board.getThingsInPath(current, { ...current, row: 4 });
+    result.left =
+      current.col === 0
+        ? "edge"
+        : board.getThingsInPath(current, { ...current, col: 0 });
+    result.right =
+      current.col === 4
+        ? "edge"
+        : board.getThingsInPath(current, { ...current, col: 4 });
+
+    for (let key in result) {
+      if (result[key] === "edge") {
+        const crossSufaceTile = board.getCrossSurfaceAdjecentTile(this.current);
+        if (crossSufaceTile) {
+          const { obstacle, player } = cubeMap[crossSufaceTile];
+          if (obstacle) result[key] = { obstacle, distance: 1 };
+          if (player) result[key] = { player, distance: 1 };
+        }
+      }
+    }
 
     return result;
   }
@@ -431,10 +455,10 @@ const players = PLAYER_START_TILES.map(
   (t, i) => new Player(i, t, DIRECTIONS[i].value)
 );
 
-const p1 = players[0];
-const p2 = players[1];
-const p3 = players[2];
-const p4 = players[3];
+const p0 = players[0];
+const p1 = players[1];
+const p2 = players[2];
+const p3 = players[3];
 
 let tileCount = 1;
 const wrapper = document.querySelector(".wrapper");
