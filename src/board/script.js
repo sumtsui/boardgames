@@ -22,29 +22,9 @@ class Board {
    ** assume obstacle always has top left as starting point
    **/
   setObstacle(start, color) {
-    const { surface, row, col } = this.cubeMap[start];
-    let right, down, diagonal;
-    if (surface === 1 && col === 4) {
-      right = this.getCrossSurfaceAdjecentTile(start);
-      down = start + 15;
-      diagonal = right - 1;
-    } else if (surface === 5 && row === 4) {
-      right = start + 1;
-      down = this.getCrossSurfaceAdjecentTile(start);
-      diagonal = down + 15;
-    } else if (surface === 7 && col === 4) {
-      right = this.getCrossSurfaceAdjecentTile(start);
-      down = start + 15;
-      diagonal = right + 1;
-    } else if (surface === 3 && row === 4) {
-      right = start + 1;
-      down = this.getCrossSurfaceAdjecentTile(start);
-      diagonal = down - 15;
-    } else {
-      right = start + 1;
-      down = start + 15;
-      diagonal = start + 15 + 1;
-    }
+    const right = this.getAdjecentTile(start, "right");
+    const down = this.getAdjecentTile(start, "down");
+    const diagonal = this.getAdjecentTile(down, "right");
 
     if (
       this.cubeMap[start]?.obstacle ||
@@ -139,36 +119,92 @@ class Board {
 
     return { obstacleCount, attempt };
   }
-  getCrossSurfaceAdjecentTile(tile) {
+  getAdjecentTile(tile, dir) {
+    const dirs = ["up", "down", "left", "right"];
+    if (!dirs.includes(dir)) throw "GET_ADJECEN_TILE_INCORRECT_DIR";
     const { surface, row, col } = this.cubeMap[tile];
-    let adjacent;
+    let result;
+
+    // handle cross surface cases
     if (surface === 1) {
-      if (col === 4) {
-        adjacent = this.cubeArrays[5][0][4 - row];
-      } else if (col === 0) {
-        adjacent = this.cubeArrays[3][0][row];
+      if (row === 4 && dir === "down") {
+        result = this.cubeArrays[4][0][col];
+      }
+      if (col === 0 && dir === "left") {
+        result = this.cubeArrays[3][0][row];
+      }
+      if (col === 4 && dir === "right") {
+        result = this.cubeArrays[5][0][4 - row];
       }
     } else if (surface === 5) {
-      if (row === 4) {
-        adjacent = this.cubeArrays[7][col][row];
-      } else if (row === 0) {
-        adjacent = this.cubeArrays[1][4 - col][4];
+      if (row === 0 && dir === "up") {
+        result = this.cubeArrays[1][4 - col][4];
+      }
+      if (row === 4 && dir === "down") {
+        result = this.cubeArrays[7][col][row];
+      }
+      if (col === 0 && dir === "left") {
+        result = this.cubeArrays[4][row][4];
       }
     } else if (surface === 7) {
-      if (col === 4) {
-        adjacent = this.cubeArrays[5][4][row];
-      } else if (col === 0) {
-        adjacent = this.cubeArrays[3][4][4 - row];
+      if (row === 0 && dir === "up") {
+        result = this.cubeArrays[4][4][col];
+      }
+      if (col === 0 && dir === "left") {
+        result = this.cubeArrays[3][4][4 - row];
+      }
+      if (col === 4 && dir === "right") {
+        result = this.cubeArrays[5][4][row];
       }
     } else if (surface === 3) {
-      if (row === 4) {
-        adjacent = this.cubeArrays[7][4 - col][0];
-      } else if (row === 0) {
-        adjacent = this.cubeArrays[1][col][0];
+      if (row === 0 && dir === "up") {
+        result = this.cubeArrays[1][col][0];
+      }
+      if (row === 4 && dir === "down") {
+        result = this.cubeArrays[7][4 - col][0];
+      }
+      if (col === 4 && dir === "right") {
+        result = this.cubeArrays[4][row][0];
+      }
+    } else if (surface === 4) {
+      if (row === 0 && dir === "up") {
+        result = this.cubeArrays[1][4][col];
+      }
+      if (row === 4 && dir === "down") {
+        result = this.cubeArrays[7][0][col];
+      }
+      if (col === 0 && dir === "left") {
+        result = this.cubeArrays[3][row][4];
+      }
+      if (col === 4 && dir === "right") {
+        result = this.cubeArrays[5][row][0];
       }
     }
 
-    return adjacent;
+    if (result) return result;
+
+    // handle same surface cases
+    switch (dir) {
+      case "up":
+        result = this.cubeArrays[surface][row - 1][col];
+        break;
+
+      case "down":
+        result = this.cubeArrays[surface][row + 1][col];
+        break;
+
+      case "left":
+        result = this.cubeArrays[surface][row][col - 1];
+        break;
+
+      case "right":
+        result = this.cubeArrays[surface][row][col + 1];
+        break;
+
+      default:
+        break;
+    }
+    return result;
   }
   // it is up to the caller to provide start and end that actually inline
   getThingsInPath(start, end) {
@@ -268,6 +304,8 @@ class Board {
         round += 3;
         result.push([], [], []);
       }
+
+      // console.log("result", result);
 
       curSubArr++;
       i++;
@@ -376,15 +414,7 @@ class Player {
     // handle crossing surface move
     if (currentTile.surface !== nextTile.surface) {
       if (
-        currentTile.surface !== 4 &&
-        nextTile.surface !== 4 &&
-        next !== board.getCrossSurfaceAdjecentTile(this.current)
-      ) {
-        throw "MOVE_FAIL_INVALID_CROSS_SURFACE";
-      } else if (
-        (currentTile.surface === 4 || nextTile.surface === 4) &&
-        Math.abs(next - this.current) !== 1 &&
-        Math.abs(next - this.current) !== 15
+        !board.getAdjecentTile(this.current, this._getDirectionChange(next))
       ) {
         throw "MOVE_FAIL_INVALID_CROSS_SURFACE";
       }
@@ -430,7 +460,8 @@ class Player {
     throw "FAIL_DETACT_DIRECTION";
   }
   getSurrounding() {
-    const sur = this._getRawSurrounding();
+    // relative directions based on current player front facing direction
+    const sur = this._getRawSurrounding(this.current);
     if (this.direction === "up") return sur;
     const dirMap = Player.DIRECTION_MAP[this.direction];
     const tempSur = { ...sur };
@@ -439,7 +470,7 @@ class Player {
     }
     return sur;
   }
-  _getRawSurrounding() {
+  _getRawSurrounding(position) {
     // absolute directions based on 2D cubeMap
     const result = {
       up: null,
@@ -447,33 +478,19 @@ class Player {
       left: null,
       right: null,
     };
-    const current = cubeMap[this.current];
+    const current = cubeMap[position];
 
-    result.up =
-      current.row === 0
-        ? "edge"
-        : board.getThingsInPath(current, { ...current, row: 0 });
-    result.down =
-      current.row === 4
-        ? "edge"
-        : board.getThingsInPath(current, { ...current, row: 4 });
-    result.left =
-      current.col === 0
-        ? "edge"
-        : board.getThingsInPath(current, { ...current, col: 0 });
-    result.right =
-      current.col === 4
-        ? "edge"
-        : board.getThingsInPath(current, { ...current, col: 4 });
+    result.up = board.getThingsInPath(current, { ...current, row: 0 });
+    result.down = board.getThingsInPath(current, { ...current, row: 4 });
+    result.left = board.getThingsInPath(current, { ...current, col: 0 });
+    result.right = board.getThingsInPath(current, { ...current, col: 4 });
 
     for (let key in result) {
-      if (result[key] === "edge") {
-        const crossSufaceTile = board.getCrossSurfaceAdjecentTile(this.current);
-        if (crossSufaceTile) {
-          const { obstacle, player } = cubeMap[crossSufaceTile];
-          if (obstacle) result[key] = { obstacle, distance: 1 };
-          if (player) result[key] = { player, distance: 1 };
-        }
+      if (result[key] === null) {
+        const { obstacle, player } =
+          board.cubeMap[board.getAdjecentTile(position, key)];
+        if (obstacle) result[key] = { obstacle, distance: 1 };
+        if (player) result[key] = { player, distance: 1 };
       }
     }
 
