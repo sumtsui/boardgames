@@ -28,7 +28,7 @@ class Board {
       return "down";
     }
   }
-  generateObstacle(start, color) {
+  generateObstacle(start) {
     function repeat(arr) {
       let lastPick = null;
       return () => {
@@ -57,61 +57,15 @@ class Board {
     let forth;
     if (this.cubeMap[second].surface === this.cubeMap[start].surface) {
       forth = this.getAdjecentTile(second, repeatUpOrDown());
-    } else {
+    } else if (this.cubeMap[third].surface === this.cubeMap[start].surface) {
       forth = this.getAdjecentTile(third, repeatLeftOrRight());
+    } else {
+      throw "MISFORMED_OBSTACLE";
     }
 
-    if (
-      this.cubeMap[start]?.obstacle ||
-      this.cubeMap[second]?.obstacle ||
-      this.cubeMap[third]?.obstacle ||
-      this.cubeMap[forth]?.obstacle ||
-      PLAYER_START_TILES.includes(second) ||
-      PLAYER_START_TILES.includes(third) ||
-      PLAYER_START_TILES.includes(forth)
-    ) {
-      throw "OBSTACLE_CREATE_FAIL";
-    }
-
-    this.cubeMap[start].obstacle = color;
-    this.cubeMap[second].obstacle = color;
-    this.cubeMap[third].obstacle = color;
-    this.cubeMap[forth].obstacle = color;
+    console.log("generateObstacle", [start, second, third, forth]);
 
     return [start, second, third, forth];
-  }
-  /**
-   ** assume obstacle always has top left as starting point
-   **/
-  setObstacle(start, color) {
-    const right = this.getAdjecentTile(start, "right");
-    const down = this.getAdjecentTile(start, "down");
-    const diagonal = this.getAdjecentTile(down, "right");
-
-    if (
-      this.cubeMap[start]?.obstacle ||
-      this.cubeMap[start - 1]?.obstacle ||
-      this.cubeMap[start - 15]?.obstacle ||
-      this.cubeMap[right]?.obstacle ||
-      this.cubeMap[right + 1]?.obstacle ||
-      this.cubeMap[down]?.obstacle ||
-      this.cubeMap[down + 15]?.obstacle ||
-      this.cubeMap[diagonal]?.obstacle ||
-      this.cubeMap[diagonal + 1]?.obstacle ||
-      this.cubeMap[diagonal + 15]?.obstacle ||
-      PLAYER_START_TILES.includes(right) ||
-      PLAYER_START_TILES.includes(down) ||
-      PLAYER_START_TILES.includes(diagonal)
-    ) {
-      throw "OBSTACLE_CREATE_FAIL";
-    }
-
-    this.cubeMap[start].obstacle = color;
-    this.cubeMap[right].obstacle = color;
-    this.cubeMap[down].obstacle = color;
-    this.cubeMap[diagonal].obstacle = color;
-
-    return [start, right, down, diagonal];
   }
   setAllObstactles() {
     const EDGES = {
@@ -138,13 +92,9 @@ class Board {
           return i;
         }
       });
-    const tilesMap = tiles.reduce(
-      (accu, cur, idx) => ({ ...accu, [cur]: idx }),
-      {}
-    );
     const obstaclePerSurfaceCount = {};
     const OBSTACLE_TOTAL = 12;
-    const ATTEMPT_TOTAL = 200;
+    const ATTEMPT_TOTAL = 300;
 
     let obstacleCount = 0;
     let attempt = 0;
@@ -165,15 +115,32 @@ class Board {
           throw "enough obstacle in surface " + this.cubeMap[start].surface;
         }
         const color = OBSTACLE_TYPES[curColorIdx % OBSTACLE_TYPES.length];
-        const newObstacle = this.generateObstacle(start, color);
-        newObstacle.forEach((i) => tiles.splice(tilesMap[i], 1));
+        const newObstacle = this.generateObstacle(start);
+
+        newObstacle.forEach((i) => {
+          if (this.cubeMap[i]?.obstacle || PLAYER_START_TILES.includes(i)) {
+            throw "OBSTACLE_CREATE_FAIL";
+          }
+          if (
+            this.cubeMap[this.getAdjecentTile(i, "up")].obstacle ||
+            this.cubeMap[this.getAdjecentTile(i, "down")].obstacle ||
+            // this.cubeMap[this.getAdjecentTile(i, "left")].obstacle ||
+            this.cubeMap[this.getAdjecentTile(i, "right")].obstacle
+          ) {
+            throw "OBSTACLE_TOO_CROWDED";
+          }
+        });
+        // accept the obstacle
+        newObstacle.forEach((i) => {
+          this.cubeMap[i].obstacle = color;
+        });
 
         obstaclePerSurfaceCount[this.cubeMap[start].surface] =
           startCountOnSurface ? startCountOnSurface + 1 : 1;
         obstacleCount++;
         curColorIdx++;
       } catch (err) {
-        console.log(err, idx, start);
+        console.log(err, start);
       }
     }
 
