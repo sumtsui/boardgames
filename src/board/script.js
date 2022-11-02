@@ -18,6 +18,68 @@ class Board {
     this.cubeArrays = this._getCubeArrays();
     this.cubeMap = this._getCubeMap(this.cubeArrays);
   }
+  _checkDirection(from, to) {
+    const fromTile = this.cubeMap[from];
+    const toTile = this.cubeMap[to];
+    if (fromTile.surface === toTile.surface) return;
+    if (fromTile.surface < toTile.surface) {
+      return "up";
+    } else {
+      return "down";
+    }
+  }
+  generateObstacle(start, color) {
+    function repeat(arr) {
+      let lastPick = null;
+      return () => {
+        if (lastPick) return lastPick;
+        const idx = Math.floor(Math.random() * arr.length);
+        lastPick = arr[idx];
+        return lastPick;
+      };
+    }
+
+    // base on start, to generate the whole obstacle:
+    // let start spawn the second from its left or right side, remember the side
+    // let start spawn the third one from its up or down side, remember the side
+    // if second is on same surface with start, let second repeat what start did
+    // else let third repeat what start did
+    // these can gurantee it is always a square obstacle
+
+    const leftOrRight = ["left", "right"];
+    const upOrDown = ["up", "down"];
+
+    const repeatLeftOrRight = repeat(leftOrRight);
+    const repeatUpOrDown = repeat(upOrDown);
+    const second = this.getAdjecentTile(start, repeatLeftOrRight());
+    const third = this.getAdjecentTile(start, repeatUpOrDown());
+
+    let forth;
+    if (this.cubeMap[second].surface === this.cubeMap[start].surface) {
+      forth = this.getAdjecentTile(second, repeatUpOrDown());
+    } else {
+      forth = this.getAdjecentTile(third, repeatLeftOrRight());
+    }
+
+    if (
+      this.cubeMap[start]?.obstacle ||
+      this.cubeMap[second]?.obstacle ||
+      this.cubeMap[third]?.obstacle ||
+      this.cubeMap[forth]?.obstacle ||
+      PLAYER_START_TILES.includes(second) ||
+      PLAYER_START_TILES.includes(third) ||
+      PLAYER_START_TILES.includes(forth)
+    ) {
+      throw "OBSTACLE_CREATE_FAIL";
+    }
+
+    this.cubeMap[start].obstacle = color;
+    this.cubeMap[second].obstacle = color;
+    this.cubeMap[third].obstacle = color;
+    this.cubeMap[forth].obstacle = color;
+
+    return [start, second, third, forth];
+  }
   /**
    ** assume obstacle always has top left as starting point
    **/
@@ -103,7 +165,7 @@ class Board {
           throw "enough obstacle in surface " + this.cubeMap[start].surface;
         }
         const color = OBSTACLE_TYPES[curColorIdx % OBSTACLE_TYPES.length];
-        const newObstacle = this.setObstacle(start, color);
+        const newObstacle = this.generateObstacle(start, color);
         newObstacle.forEach((i) => tiles.splice(tilesMap[i], 1));
 
         obstaclePerSurfaceCount[this.cubeMap[start].surface] =
@@ -343,6 +405,11 @@ class Board {
 
 const board = new Board();
 const obCount = board.setAllObstactles();
+// console.log(board.generateObstacle(55, "green"));
+// console.log(board.generateObstacle(148, "blue"));
+// console.log(board.generateObstacle(201, "red"));
+// console.log(board.generateObstacle(78, "purple"));
+// console.log(board.generateObstacle(97, "brown"));
 const cubeMap = board.cubeMap;
 const cubeArrays = board.cubeArrays;
 console.log("obCount", obCount);
