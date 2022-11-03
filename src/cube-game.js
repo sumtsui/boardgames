@@ -1,15 +1,15 @@
-const CUBE_WIDTH = 60;
-const BOARD_WIDTH = 15;
+// import "core-js/stable";
+
+log("start");
 const TILE_TOTAL = 225;
 const PLAYER_START_TILES = [38, 118, 188, 108];
 const OBSTACLE_TYPES = ["red", "blue", "yellow", "green", "purple"];
 const IN_PLAY_SURFACES = [1, 3, 4, 5, 7];
-const DIRECTIONS = [
-  { value: "down", degree: "180deg" },
-  { value: "left", degree: "-90deg" },
-  { value: "up", degree: "0deg" },
-  { value: "right", degree: "90deg" },
-];
+
+function log(...val) {
+  // if (this === window) console.log(...val);
+  // else print(...val);
+}
 
 class Board {
   cubeArrays;
@@ -63,7 +63,7 @@ class Board {
       throw "MISFORMED_OBSTACLE";
     }
 
-    console.log("generateObstacle", [start, second, third, forth]);
+    log("generateObstacle", [start, second, third, forth]);
 
     return [start, second, third, forth];
   }
@@ -140,11 +140,11 @@ class Board {
         obstacleCount++;
         curColorIdx++;
       } catch (err) {
-        console.log(err, start);
+        log(err, start);
       }
     }
 
-    console.log("obstaclePerSurfaceCount", obstaclePerSurfaceCount);
+    log("obstaclePerSurfaceCount", obstaclePerSurfaceCount);
 
     return { obstacleCount, attempt };
   }
@@ -334,7 +334,7 @@ class Board {
         result.push([], [], []);
       }
 
-      // console.log("result", result);
+      // log("result", result);
 
       curSubArr++;
       i++;
@@ -369,17 +369,6 @@ class Board {
     return result;
   }
 }
-
-const board = new Board();
-const obCount = board.setAllObstactles();
-// console.log(board.generateObstacle(55, "green"));
-// console.log(board.generateObstacle(148, "blue"));
-// console.log(board.generateObstacle(201, "red"));
-// console.log(board.generateObstacle(78, "purple"));
-// console.log(board.generateObstacle(97, "brown"));
-const cubeMap = board.cubeMap;
-const cubeArrays = board.cubeArrays;
-console.log("obCount", obCount);
 
 class Player {
   static GOAL_MAP = {
@@ -448,8 +437,12 @@ class Player {
     // handle crossing surface move
     if (currentTile.surface !== nextTile.surface) {
       if (
-        !board.getAdjecentTile(this.current, this._getDirectionChange(next))
+        board.getAdjecentTile(this.current, this._getDirectionChange(next)) !==
+        next
       ) {
+        log(
+          board.getAdjecentTile(this.current, this._getDirectionChange(next))
+        );
         throw "MOVE_FAIL_INVALID_CROSS_SURFACE";
       }
     }
@@ -532,8 +525,16 @@ class Player {
   }
 }
 
+// --------- game init ------------
+const board = new Board();
+const obCount = board.setAllObstactles();
+const cubeMap = board.cubeMap;
+const cubeArrays = board.cubeArrays;
+log("total obstacles", obCount);
+
+const DIRECTIONS = ["down", "left", "up", "right"];
 const players = PLAYER_START_TILES.map(
-  (t, i) => new Player(i, t, DIRECTIONS[i].value)
+  (t, i) => new Player(i, t, DIRECTIONS[i])
 );
 
 const p0 = players[0];
@@ -541,57 +542,8 @@ const p1 = players[1];
 const p2 = players[2];
 const p3 = players[3];
 
-let tileCount = 1;
-const wrapper = document.querySelector(".wrapper");
-function makeTile(left, top, isPlayArea, isStartTile, color, playerId) {
-  const tile = document.createElement("div");
-  tile.className = "tile";
-  tile.style.width = CUBE_WIDTH + "px";
-  tile.style.height = CUBE_WIDTH + "px";
-  tile.style.left = left;
-  tile.style.top = top;
-  if (isPlayArea) {
-    tile.style.border = "1.5px solid skyblue";
-  }
-  if (isStartTile) {
-    tile.style.backgroundColor = "pink";
-  }
-  if (color) {
-    tile.style.backgroundColor = color;
-  }
-  const num = document.createElement("div");
-  num.innerText = tileCount;
-
-  const wrap = document.createElement("div");
-  wrap.className = "wrap";
-  wrap.appendChild(num);
-  if (playerId) {
-    const player = document.createElement("div");
-    player.classList.add("player");
-    player.style.transform = `rotate(${
-      DIRECTIONS.find((d) => d.value === players[playerId].direction).degree
-    })`;
-    wrap.appendChild(player);
-  }
-
-  tile.appendChild(wrap);
-  tileCount++;
-  wrapper.appendChild(tile);
+// ---------- JOYO integration ---------------
+log(p0.current);
+function When_JOYO_Read(value) {
+  print(value);
 }
-function renderCube() {
-  wrapper.innerHTML = "";
-  while (tileCount <= TILE_TOTAL) {
-    const left = (tileCount % BOARD_WIDTH || BOARD_WIDTH) * CUBE_WIDTH + "px";
-    const top = Math.ceil(tileCount / BOARD_WIDTH) * CUBE_WIDTH + "px";
-    const isPlayArea =
-      (tileCount % BOARD_WIDTH > 5 && tileCount % BOARD_WIDTH < 11) ||
-      (tileCount > 75 && tileCount < 151);
-    const obstacleColor = board.cubeMap[tileCount].obstacle;
-    const isPlayerStart = PLAYER_START_TILES.includes(tileCount);
-    const player = board.cubeMap[tileCount].player;
-    makeTile(left, top, isPlayArea, isPlayerStart, obstacleColor, player);
-  }
-  tileCount = 1;
-}
-
-renderCube();
