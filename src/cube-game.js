@@ -466,7 +466,7 @@ class Player {
     this.current = next;
     nextTile.player = this.id;
     currentTile.player = undefined;
-    renderCube();
+    // renderCube();
     return result;
   }
   _getDirectionChange(next) {
