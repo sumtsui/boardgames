@@ -2,11 +2,11 @@ const path = require("path");
 const TerserPlugin = require("terser-webpack-plugin");
 
 module.exports = {
-  entry: "./src/cube-game.js",
-  mode: "development",
+  entry: "./src/try.js",
+  mode: "production",
   output: {
     filename: "main.js",
-    path: path.resolve(__dirname, "dist"),
+    path: path.resolve(__dirname, "webpackOutput"),
   },
   module: {
     rules: [
@@ -25,16 +25,6 @@ module.exports = {
     ],
   },
   optimization: {
-    minimize: true,
-    minimizer: [
-      new TerserPlugin({
-        test: /\.m?js$/,
-        terserOptions: {
-          compress: {
-            drop_console: true,
-          },
-        },
-      }),
-    ],
+    minimize: false,
   },
 };

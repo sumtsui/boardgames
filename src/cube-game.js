@@ -5,8 +5,8 @@ const OBSTACLE_TYPES = ["red", "blue", "yellow", "green", "purple"];
 const IN_PLAY_SURFACES = [1, 3, 4, 5, 7];
 
 function log(...val) {
-  console.log(...val);
-  // print(...val);
+  print(...val);
+  // console.log(...val);
 }
 
 class Board {
