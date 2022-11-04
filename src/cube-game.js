@@ -1,5 +1,3 @@
-// import "core-js/stable";
-
 log("start");
 const TILE_TOTAL = 225;
 const PLAYER_START_TILES = [38, 118, 188, 108];
@@ -7,8 +5,8 @@ const OBSTACLE_TYPES = ["red", "blue", "yellow", "green", "purple"];
 const IN_PLAY_SURFACES = [1, 3, 4, 5, 7];
 
 function log(...val) {
-  // if (this === window) console.log(...val);
-  // else print(...val);
+  console.log(...val);
+  // print(...val);
 }
 
 class Board {
