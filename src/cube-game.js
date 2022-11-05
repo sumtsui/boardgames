@@ -1,3 +1,54 @@
+Array.prototype.map = function (callbackFn) {
+  var arr = [];
+  for (var i = 0; i < this.length; i++) {
+    /* call the callback function for every value of this array and       push the returned value into our resulting array
+     */
+    arr.push(callbackFn(this[i], i, this));
+  }
+  return arr;
+};
+Array.prototype.filter = function (callbackFn) {
+  var arr = [];
+  for (var i = 0; i < this.length; i++) {
+    if (callbackFn.call(this, this[i], i, this)) {
+      arr.push(this[i]);
+    }
+  }
+  return arr;
+};
+Array.prototype.fill = function (value) {
+  var O = Object(this);
+  var len = parseInt(O.length, 10);
+  var start = arguments[1];
+  var relativeStart = parseInt(start, 10) || 0;
+  var k =
+    relativeStart < 0
+      ? Math.max(len + relativeStart, 0)
+      : Math.min(relativeStart, len);
+  var end = arguments[2];
+  var relativeEnd = end === undefined ? len : parseInt(end) || 0;
+  var final =
+    relativeEnd < 0
+      ? Math.max(len + relativeEnd, 0)
+      : Math.min(relativeEnd, len);
+
+  for (; k < final; k++) {
+    O[k] = value;
+  }
+
+  return O;
+};
+Array.prototype.includes = function (search, start) {
+  "use strict";
+  if (search instanceof RegExp) {
+    throw TypeError("first argument must not be a RegExp");
+  }
+  if (start === undefined) {
+    start = 0;
+  }
+  return this.indexOf(search, start) !== -1;
+};
+
 log("start");
 const TILE_TOTAL = 225;
 const PLAYER_START_TILES = [38, 118, 188, 108];
@@ -5,8 +56,8 @@ const OBSTACLE_TYPES = ["red", "blue", "yellow", "green", "purple"];
 const IN_PLAY_SURFACES = [1, 3, 4, 5, 7];
 
 function log(...val) {
-  print(...val);
-  // console.log(...val);
+  if (window.console) console.log(...val);
+  else print(...val);
 }
 
 class Board {
@@ -464,7 +515,7 @@ class Player {
     this.current = next;
     nextTile.player = this.id;
     currentTile.player = undefined;
-    // renderCube();
+    renderCube();
     return result;
   }
   _getDirectionChange(next) {

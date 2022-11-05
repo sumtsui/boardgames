@@ -1,12 +1,11 @@
 const path = require("path");
-const TerserPlugin = require("terser-webpack-plugin");
 
 module.exports = {
-  entry: "./src/try.js",
+  entry: "./src/cube-game.js",
   mode: "production",
   output: {
-    filename: "main.js",
-    path: path.resolve(__dirname, "webpackOutput"),
+    filename: "[name].js",
+    path: path.resolve(__dirname, "dist"),
   },
   module: {
     rules: [
@@ -16,9 +15,7 @@ module.exports = {
         use: {
           loader: "babel-loader",
           options: {
-            presets: [
-              ["@babel/preset-env", { useBuiltIns: "usage", corejs: "3.26.0" }],
-            ],
+            presets: [["@babel/preset-env"]],
           },
         },
       },
