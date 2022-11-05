@@ -22,7 +22,7 @@ function makeTile(left, top, isPlayArea, isStartTile, color, playerId) {
     tile.style.backgroundColor = "pink";
   }
   if (color) {
-    tile.style.backgroundColor = color;
+    tile.style.backgroundColor = "#" + color;
   }
   const num = document.createElement("div");
   num.innerText = tileCount;
@@ -34,7 +34,8 @@ function makeTile(left, top, isPlayArea, isStartTile, color, playerId) {
     const player = document.createElement("div");
     player.classList.add("player");
     player.style.transform = `rotate(${
-      DIRECTIONS.find((d) => d.value === players[playerId].direction).degree
+      DIRECTIONS.find((d) => d.value === players[playerId].absoluteDirection)
+        .degree
     })`;
     wrap.appendChild(player);
   }
@@ -51,10 +52,10 @@ function renderCube() {
     const isPlayArea =
       (tileCount % BOARD_WIDTH > 5 && tileCount % BOARD_WIDTH < 11) ||
       (tileCount > 75 && tileCount < 151);
-    const obstacleColor = board.cubeMap[tileCount].obstacle;
+    const obstacle = board.cubeMap[tileCount].obstacle;
     const isPlayerStart = PLAYER_START_TILES.includes(tileCount);
     const player = board.cubeMap[tileCount].player;
-    makeTile(left, top, isPlayArea, isPlayerStart, obstacleColor, player);
+    makeTile(left, top, isPlayArea, isPlayerStart, obstacle?.color, player);
   }
   tileCount = 1;
 }

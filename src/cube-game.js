@@ -52,7 +52,13 @@ Array.prototype.includes = function (search, start) {
 log("start");
 const TILE_TOTAL = 225;
 const PLAYER_START_TILES = [38, 118, 188, 108];
-const OBSTACLE_TYPES = ["red", "blue", "yellow", "green", "purple"];
+const OBSTACLE_TYPES = [
+  { value: "red", color: "FF0000" },
+  { value: "blue", color: "0000FF" },
+  { value: "yellow", color: "FFFF00" },
+  { value: "green", color: "008000" },
+  { value: "purple", color: "800080" },
+];
 const IN_PLAY_SURFACES = [1, 3, 4, 5, 7];
 
 function log(...val) {
@@ -163,7 +169,7 @@ class Board {
         ) {
           throw "enough obstacle in surface " + this.cubeMap[start].surface;
         }
-        const color = OBSTACLE_TYPES[curColorIdx % OBSTACLE_TYPES.length];
+        const obstacle = OBSTACLE_TYPES[curColorIdx % OBSTACLE_TYPES.length];
         const newObstacle = this.generateObstacle(start);
 
         newObstacle.forEach((i) => {
@@ -171,17 +177,17 @@ class Board {
             throw "OBSTACLE_CREATE_FAIL";
           }
           if (
-            this.cubeMap[this.getAdjecentTile(i, "up")].obstacle ||
-            this.cubeMap[this.getAdjecentTile(i, "down")].obstacle ||
-            // this.cubeMap[this.getAdjecentTile(i, "left")].obstacle ||
-            this.cubeMap[this.getAdjecentTile(i, "right")].obstacle
+            this.cubeMap[this.getAdjecentTile(i, "up")]?.obstacle ||
+            this.cubeMap[this.getAdjecentTile(i, "down")]?.obstacle ||
+            // this.cubeMap[this.getAdjecentTile(i, "left")]?.obstacle ||
+            this.cubeMap[this.getAdjecentTile(i, "right")]?.obstacle
           ) {
             throw "OBSTACLE_TOO_CROWDED";
           }
         });
         // accept the obstacle
         newObstacle.forEach((i) => {
-          this.cubeMap[i].obstacle = color;
+          this.cubeMap[i].obstacle = obstacle;
         });
 
         obstaclePerSurfaceCount[this.cubeMap[start].surface] =
@@ -197,10 +203,12 @@ class Board {
 
     return { obstacleCount, attempt };
   }
-  getAdjecentTile(tile, dir) {
+  getAdjecentTile(tileNum, dir) {
     const dirs = ["up", "down", "left", "right"];
     if (!dirs.includes(dir)) throw "GET_ADJECEN_TILE_INCORRECT_DIR";
-    const { surface, row, col } = this.cubeMap[tile];
+    const tile = this.cubeMap[tileNum];
+    if (!tile) return null;
+    const { surface, row, col } = tile;
     let result;
 
     // handle cross surface cases
@@ -264,19 +272,19 @@ class Board {
     // handle same surface cases
     switch (dir) {
       case "up":
-        result = this.cubeArrays[surface][row - 1][col];
+        result = this.cubeArrays[surface]?.[row - 1]?.[col];
         break;
 
       case "down":
-        result = this.cubeArrays[surface][row + 1][col];
+        result = this.cubeArrays[surface]?.[row + 1]?.[col];
         break;
 
       case "left":
-        result = this.cubeArrays[surface][row][col - 1];
+        result = this.cubeArrays[surface]?.[row]?.[col - 1];
         break;
 
       case "right":
-        result = this.cubeArrays[surface][row][col + 1];
+        result = this.cubeArrays[surface]?.[row]?.[col + 1];
         break;
 
       default:
@@ -450,14 +458,16 @@ class Player {
   current;
   collectedObstacles = [];
   goal;
-  direction;
+  absoluteDirection;
+  win;
 
-  constructor(id, start, direction) {
+  constructor(id, start, absoluteDirection) {
     this.id = id.toString();
     this.current = start;
     this.goal = PLAYER_START_TILES[Player.GOAL_MAP[id]];
     cubeMap[start].player = this.id;
-    this.direction = direction;
+    this.absoluteDirection = absoluteDirection;
+    this.win = false;
   }
   move(next) {
     const result = {
@@ -486,12 +496,11 @@ class Player {
     // handle crossing surface move
     if (currentTile.surface !== nextTile.surface) {
       if (
-        board.getAdjecentTile(this.current, this._getDirectionChange(next)) !==
-        next
+        board.getAdjecentTile(
+          this.current,
+          this._getCrossSurfaceMoveDirection(next)
+        ) !== next
       ) {
-        log(
-          board.getAdjecentTile(this.current, this._getDirectionChange(next))
-        );
         throw "MOVE_FAIL_INVALID_CROSS_SURFACE";
       }
     }
@@ -510,13 +519,29 @@ class Player {
     }
     if (next === this.goal) {
       result.win = true;
+      this.win = true;
     }
-    this.direction = this._getDirectionChange(next) || this.direction;
+    this.absoluteDirection =
+      this._getDirectionChange(next) || this.absoluteDirection;
     this.current = next;
     nextTile.player = this.id;
     currentTile.player = undefined;
     renderCube();
     return result;
+  }
+  _getCrossSurfaceMoveDirection(next) {
+    const curTile = cubeMap[this.current];
+    const nextTile = cubeMap[next];
+    if (curTile.surface === 1 && nextTile.surface === 3) return "left";
+    if (curTile.surface === 1 && nextTile.surface === 5) return "right";
+    if (curTile.surface === 3 && nextTile.surface === 1) return "up";
+    if (curTile.surface === 3 && nextTile.surface === 7) return "down";
+    if (curTile.surface === 5 && nextTile.surface === 1) return "up";
+    if (curTile.surface === 5 && nextTile.surface === 7) return "down";
+    if (curTile.surface === 7 && nextTile.surface === 3) return "left";
+    if (curTile.surface === 7 && nextTile.surface === 5) return "right";
+    if (nextTile.surface === 4) return this._getDirectionChange(next);
+    throw "UNKNOWN_MOVE_DIRECTION";
   }
   _getDirectionChange(next) {
     const { surface } = cubeMap[this.current];
@@ -536,17 +561,17 @@ class Player {
     throw "FAIL_DETACT_DIRECTION";
   }
   getSurrounding() {
-    // relative directions based on current player front facing direction
-    const sur = this._getRawSurrounding(this.current);
-    if (this.direction === "up") return sur;
-    const dirMap = Player.DIRECTION_MAP[this.direction];
+    // relative directions based on current player front facing absoluteDirection
+    const sur = this._getAbsoluteSurrounding(this.current);
+    if (this.absoluteDirection === "up") return sur;
+    const dirMap = Player.DIRECTION_MAP[this.absoluteDirection];
     const tempSur = { ...sur };
     for (let key in sur) {
       sur[key] = tempSur[dirMap[key]];
     }
     return sur;
   }
-  _getRawSurrounding(position) {
+  _getAbsoluteSurrounding(tileNum = this.current) {
     // absolute directions based on 2D cubeMap
     const result = {
       up: null,
@@ -554,19 +579,23 @@ class Player {
       left: null,
       right: null,
     };
-    const current = cubeMap[position];
+    const current = cubeMap[tileNum];
 
+    // detect same surface
     result.up = board.getThingsInPath(current, { ...current, row: 0 });
     result.down = board.getThingsInPath(current, { ...current, row: 4 });
     result.left = board.getThingsInPath(current, { ...current, col: 0 });
     result.right = board.getThingsInPath(current, { ...current, col: 4 });
-
-    for (let key in result) {
-      if (result[key] === null) {
+    // detect cross surface if any
+    for (let direction in result) {
+      if (
+        result[direction] === null &&
+        board.cubeMap[board.getAdjecentTile(tileNum, direction)]
+      ) {
         const { obstacle, player } =
-          board.cubeMap[board.getAdjecentTile(position, key)];
-        if (obstacle) result[key] = { obstacle, distance: 1 };
-        if (player) result[key] = { player, distance: 1 };
+          board.cubeMap[board.getAdjecentTile(tileNum, direction)];
+        if (obstacle) result[direction] = { obstacle, distance: 1 };
+        if (player) result[direction] = { player, distance: 1 };
       }
     }
 
@@ -593,6 +622,91 @@ const p3 = players[3];
 
 // ---------- JOYO integration ---------------
 log(p0.current);
+const JOYO_COLOR_ERROR = 0xfe0b36;
+const JOYO_COLOR_WIN = 0xf9e716;
+const JOYO_COLOR_COLIDE = 0x162cf9;
+const JOYO_COLOR_SUCCESS = 0x16f93d;
+const JOYO_PLAYERS_MAP = {
+  226: p0,
+  227: p1,
+  228: p2,
+  229: p3,
+};
+const JOYO_OBSTACLE_COLOR_MAP = OBSTACLE_TYPES;
+
+let joyoCurrentPlayer = null;
+let joyoCurrentPlayerHasMoved = false;
 function When_JOYO_Read(value) {
-  print(value);
+  log(value);
+
+  // error cases
+  if (!joyoCurrentPlayer && !JOYO_PLAYERS_MAP[value]) {
+    joyoHandleError();
+    return;
+  }
+  if (joyoCurrentPlayer && !board.cubeMap[value]) {
+    joyoHandleError();
+    return;
+  }
+  if (joyoCurrentPlayerHasMoved && !JOYO_PLAYERS_MAP[value]) {
+    joyoHandleError();
+    return;
+  }
+  if (
+    !joyoCurrentPlayerHasMoved &&
+    joyoCurrentPlayer &&
+    !board.cubeMap[value]
+  ) {
+    joyoHandleError();
+    return;
+  }
+
+  // happy path
+  if (JOYO_PLAYERS_MAP[value]) {
+    joyoCurrentPlayerHasMoved = false;
+    joyoCurrentPlayer = JOYO_PLAYERS_MAP[value];
+    joyoHandleShowSurrending(joyoCurrentPlayer.getSurrounding());
+  } else if (board.cubeMap[value]) {
+    try {
+      const result = joyoCurrentPlayer.move(value);
+      joyoCurrentPlayerHasMoved = true;
+
+      if (result.win) {
+        joyoHandleWin();
+        // handle
+      } else if (result.collideWithOtherPlayer) {
+        joyoHandleColide();
+        // handle
+      } else {
+        joyoHandleSuccess();
+      }
+
+      joyoCurrentPlayer = null;
+    } catch {
+      joyoHandleError();
+    }
+  } else {
+    joyoHandleError();
+  }
+}
+
+function joyoHandleError() {
+  log("JOYO_COLOR_ERROR");
+  // bleSetLightAnimation("star", 2, JOYO_COLOR_ERROR);
+}
+function joyoHandleWin() {
+  log("JOYO_COLOR_WIN");
+  // bleSetLightAnimation("star", 2, JOYO_COLOR_WIN);
+}
+function joyoHandleColide() {
+  log("JOYO_COLOR_COLIDE");
+  // bleSetLightAnimation("star", 2, JOYO_COLOR_COLIDE);
+}
+function joyoHandleSuccess() {
+  log("JOYO_COLOR_SUCCESS");
+  // bleSetLightAnimation("star", 2, JOYO_COLOR_SUCCESS);
+}
+function joyoHandleShowSurrending(surrending) {
+  log(surrending);
+  bleSetLight: JSON.stringify({ colors: [], bright: 0.5 });
 }
