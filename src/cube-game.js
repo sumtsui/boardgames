@@ -48,6 +48,15 @@ Array.prototype.includes = function (search, start) {
   }
   return this.indexOf(search, start) !== -1;
 };
+Number.isInteger =
+  Number.isInteger ||
+  function (value) {
+    return (
+      typeof value === "number" &&
+      isFinite(value) &&
+      Math.floor(value) === value
+    );
+  };
 
 log("start");
 const TILE_TOTAL = 225;
@@ -526,7 +535,7 @@ class Player {
     this.current = next;
     nextTile.player = this.id;
     currentTile.player = undefined;
-    renderCube();
+    // renderCube();
     return result;
   }
   _getCrossSurfaceMoveDirection(next) {
@@ -621,50 +630,71 @@ const p2 = players[2];
 const p3 = players[3];
 
 // ---------- JOYO integration ---------------
-log(p0.current);
+clearAllLight();
+bleSetLightAnimation("run", 3, 0x4b0082);
 const JOYO_COLOR_ERROR = 0xfe0b36;
 const JOYO_COLOR_WIN = 0xf9e716;
 const JOYO_COLOR_COLIDE = 0x162cf9;
 const JOYO_COLOR_SUCCESS = 0x16f93d;
 const JOYO_PLAYERS_MAP = {
-  226: p0,
-  227: p1,
-  228: p2,
-  229: p3,
+  5980: p0,
+  5970: p1,
+  5960: p2,
+  5950: p3,
 };
 const JOYO_OBSTACLE_COLOR_MAP = OBSTACLE_TYPES;
 
 let joyoCurrentPlayer = null;
 let joyoCurrentPlayerHasMoved = false;
+let lastRead = null;
+
 function When_JOYO_Read(value) {
+  // handle reading air
+  value = value - 2500;
+
+  if (
+    !Object.keys(JOYO_PLAYERS_MAP).includes(value.toString()) &&
+    !board.cubeMap[value]
+  ) {
+    return log("VALUE_NOT_PLAYER_OR_MOVE", value);
+  }
+
+  // prevent accidentally read same value twice unless it is player number
+  if (!lastRead) lastRead = value;
+  else if (lastRead && lastRead === value) return log("SAME_VALUE_READ_TWICE");
+  else lastRead = value;
+
+  clearAllLight();
+
   log(value);
 
   // error cases
   if (!joyoCurrentPlayer && !JOYO_PLAYERS_MAP[value]) {
-    joyoHandleError();
-    return;
+    joyoLight(JOYO_COLOR_ERROR);
+    return log("NO_PLAYER_OR_MOVE");
   }
-  if (joyoCurrentPlayer && !board.cubeMap[value]) {
-    joyoHandleError();
-    return;
-  }
+  // if (joyoCurrentPlayer && !board.cubeMap[value]) {
+  //   joyoLight(JOYO_COLOR_ERROR);
+  //   return;
+  // }
   if (joyoCurrentPlayerHasMoved && !JOYO_PLAYERS_MAP[value]) {
-    joyoHandleError();
-    return;
+    joyoLight(JOYO_COLOR_ERROR);
+    return log("CURRENT_PLAYER_HAS_MOVED");
   }
-  if (
-    !joyoCurrentPlayerHasMoved &&
-    joyoCurrentPlayer &&
-    !board.cubeMap[value]
-  ) {
-    joyoHandleError();
-    return;
-  }
+  // if (
+  //   !joyoCurrentPlayerHasMoved &&
+  //   joyoCurrentPlayer &&
+  //   !board.cubeMap[value]
+  // ) {
+  //   joyoLight(JOYO_COLOR_ERROR);
+  //   return;
+  // }
 
   // happy path
   if (JOYO_PLAYERS_MAP[value]) {
     joyoCurrentPlayerHasMoved = false;
     joyoCurrentPlayer = JOYO_PLAYERS_MAP[value];
+    joyoLight(JOYO_COLOR_SUCCESS);
     joyoHandleShowSurrending(joyoCurrentPlayer.getSurrounding());
   } else if (board.cubeMap[value]) {
     try {
@@ -672,41 +702,51 @@ function When_JOYO_Read(value) {
       joyoCurrentPlayerHasMoved = true;
 
       if (result.win) {
-        joyoHandleWin();
+        joyoLight(JOYO_COLOR_WIN);
         // handle
       } else if (result.collideWithOtherPlayer) {
-        joyoHandleColide();
+        joyoLight(JOYO_COLOR_COLIDE);
         // handle
       } else {
-        joyoHandleSuccess();
+        joyoLight(JOYO_COLOR_SUCCESS);
       }
 
       joyoCurrentPlayer = null;
-    } catch {
-      joyoHandleError();
+    } catch (e) {
+      log("Error", e);
+      joyoLight(JOYO_COLOR_ERROR);
     }
   } else {
-    joyoHandleError();
+    log("NOT_RECOGNIZE_VALUE", value);
+    joyoLight(JOYO_COLOR_ERROR);
   }
 }
 
-function joyoHandleError() {
-  log("JOYO_COLOR_ERROR");
-  // bleSetLightAnimation("star", 2, JOYO_COLOR_ERROR);
-}
-function joyoHandleWin() {
-  log("JOYO_COLOR_WIN");
-  // bleSetLightAnimation("star", 2, JOYO_COLOR_WIN);
-}
-function joyoHandleColide() {
-  log("JOYO_COLOR_COLIDE");
-  // bleSetLightAnimation("star", 2, JOYO_COLOR_COLIDE);
-}
-function joyoHandleSuccess() {
-  log("JOYO_COLOR_SUCCESS");
-  // bleSetLightAnimation("star", 2, JOYO_COLOR_SUCCESS);
+function joyoLight(color) {
+  log(color);
+  bleSetLight(
+    JSON.stringify({
+      colors: new Array(12).fill(color),
+      bright: 0.5,
+    })
+  );
 }
 function joyoHandleShowSurrending(surrending) {
-  log(surrending);
-  bleSetLight: JSON.stringify({ colors: [], bright: 0.5 });
+  log(JSON.stringify(surrending, null, 4));
+  const { left, down, up, right } = surrending;
+  bleSetLight(
+    JSON.stringify({
+      colors: [
+        right?.obstacle?.color,
+        right?.obstacle?.color,
+        down?.obstacle?.color,
+        down?.obstacle?.color,
+        left?.obstacle?.color,
+        left?.obstacle?.color,
+        up?.obstacle?.color,
+        up?.obstacle?.color,
+      ].map((c) => "0x" + c),
+      bright: 0.5,
+    })
+  );
 }
