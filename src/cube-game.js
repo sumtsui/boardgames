@@ -61,6 +61,7 @@ Number.isInteger =
 log("start");
 const TILE_TOTAL = 225;
 const PLAYER_START_TILES = [38, 118, 188, 108];
+const DIRECTIONS = ["down", "left", "up", "right"];
 const OBSTACLE_TYPES = [
   { value: "red", color: "FF0000" },
   { value: "blue", color: "0000FF" },
@@ -188,7 +189,7 @@ class Board {
           if (
             this.cubeMap[this.getAdjecentTile(i, "up")]?.obstacle ||
             this.cubeMap[this.getAdjecentTile(i, "down")]?.obstacle ||
-            // this.cubeMap[this.getAdjecentTile(i, "left")]?.obstacle ||
+            // this.cubeMap[this.getAdjecentTile(i, "left")]?.obstacle || // make it less strict
             this.cubeMap[this.getAdjecentTile(i, "right")]?.obstacle
           ) {
             throw "OBSTACLE_TOO_CROWDED";
@@ -196,7 +197,7 @@ class Board {
         });
         // accept the obstacle
         newObstacle.forEach((i) => {
-          this.cubeMap[i].obstacle = obstacle;
+          this.cubeMap[i].obstacle = { ...obstacle, id: start.toString() };
         });
 
         obstaclePerSurfaceCount[this.cubeMap[start].surface] =
@@ -299,7 +300,9 @@ class Board {
       default:
         break;
     }
-    return result;
+
+    if (result) return result;
+    return undefined;
   }
   // it is up to the caller to provide start and end that actually inline
   getThingsInPath(start, end) {
@@ -465,10 +468,9 @@ class Player {
   };
   id;
   current;
-  collectedObstacles = [];
+  collectedObstacles = {};
   goal;
   absoluteDirection;
-  win;
 
   constructor(id, start, absoluteDirection) {
     this.id = id.toString();
@@ -478,7 +480,22 @@ class Player {
     this.absoluteDirection = absoluteDirection;
     this.win = false;
   }
-  move(next) {
+  _collectObstacles() {
+    DIRECTIONS.forEach((dir) => {
+      const tileNum = board.getAdjecentTile(this.current, dir);
+      const tile = cubeMap[tileNum];
+      if (tile?.obstacle?.id) this.collectedObstacles[tileNum] = tile.obstacle;
+    });
+  }
+  move(next, isGod) {
+    if (isGod) {
+      cubeMap[next].player = this.id;
+      cubeMap[this.current].player = null;
+      this.current = next;
+      renderCube();
+      return;
+    }
+
     const result = {
       collideWithOtherPlayer: undefined,
       win: false,
@@ -526,17 +543,35 @@ class Player {
     if (nextTile.player) {
       result.collideWithOtherPlayer = nextTile.player;
     }
-    if (next === this.goal) {
-      result.win = true;
-      this.win = true;
-    }
+
     this.absoluteDirection =
       this._getDirectionChange(next) || this.absoluteDirection;
     this.current = next;
     nextTile.player = this.id;
     currentTile.player = undefined;
-    // renderCube();
+
+    this._collectObstacles();
+    log("collected obstacles", this.collectedObstacles);
+
+    if (next === this.goal) {
+      if (this._countActuallCollectedObstacles() >= 4) {
+        result.win = true;
+      }
+    }
+
+    renderCube();
     return result;
+  }
+  _countActuallCollectedObstacles() {
+    // pass by same obstacle twice, count as collected that obstacle
+    const actuallCollected = {};
+    Object.values(this.collectedObstacles).forEach((ob) => {
+      if (actuallCollected[ob.value + ob.id])
+        actuallCollected[ob.value + ob.id]++;
+      else actuallCollected[ob.value + ob.id] = 1;
+    });
+
+    return Object.values(actuallCollected).filter((count) => count >= 2).length;
   }
   _getCrossSurfaceMoveDirection(next) {
     const curTile = cubeMap[this.current];
@@ -549,7 +584,8 @@ class Player {
     if (curTile.surface === 5 && nextTile.surface === 7) return "down";
     if (curTile.surface === 7 && nextTile.surface === 3) return "left";
     if (curTile.surface === 7 && nextTile.surface === 5) return "right";
-    if (nextTile.surface === 4) return this._getDirectionChange(next);
+    if (curTile.surface === 4 || nextTile.surface === 4)
+      return this._getDirectionChange(next);
     throw "UNKNOWN_MOVE_DIRECTION";
   }
   _getDirectionChange(next) {
@@ -617,9 +653,7 @@ const board = new Board();
 const obCount = board.setAllObstactles();
 const cubeMap = board.cubeMap;
 const cubeArrays = board.cubeArrays;
-log("total obstacles", obCount);
-
-const DIRECTIONS = ["down", "left", "up", "right"];
+log("total obstacles", JSON.stringify(obCount));
 const players = PLAYER_START_TILES.map(
   (t, i) => new Player(i, t, DIRECTIONS[i])
 );
@@ -630,12 +664,14 @@ const p2 = players[2];
 const p3 = players[3];
 
 // ---------- JOYO integration ---------------
-clearAllLight();
-bleSetLightAnimation("run", 3, 0x4b0082);
+// clearAllLight();
+// bleSetLightAnimation("run", 3, 0xf9e716);
 const JOYO_COLOR_ERROR = 0xfe0b36;
 const JOYO_COLOR_WIN = 0xf9e716;
 const JOYO_COLOR_COLIDE = 0x162cf9;
 const JOYO_COLOR_SUCCESS = 0x16f93d;
+const JOYO_COLOR_UNKNOWN_OBJECT = 0xffffff;
+const JOYO_COLOR_PLAYER = 0x00ffff;
 const JOYO_PLAYERS_MAP = {
   5980: p0,
   5970: p1,
@@ -673,22 +709,11 @@ function When_JOYO_Read(value) {
     joyoLight(JOYO_COLOR_ERROR);
     return log("NO_PLAYER_OR_MOVE");
   }
-  // if (joyoCurrentPlayer && !board.cubeMap[value]) {
-  //   joyoLight(JOYO_COLOR_ERROR);
-  //   return;
-  // }
+
   if (joyoCurrentPlayerHasMoved && !JOYO_PLAYERS_MAP[value]) {
     joyoLight(JOYO_COLOR_ERROR);
     return log("CURRENT_PLAYER_HAS_MOVED");
   }
-  // if (
-  //   !joyoCurrentPlayerHasMoved &&
-  //   joyoCurrentPlayer &&
-  //   !board.cubeMap[value]
-  // ) {
-  //   joyoLight(JOYO_COLOR_ERROR);
-  //   return;
-  // }
 
   // happy path
   if (JOYO_PLAYERS_MAP[value]) {
@@ -734,19 +759,27 @@ function joyoLight(color) {
 function joyoHandleShowSurrending(surrending) {
   log(JSON.stringify(surrending, null, 4));
   const { left, down, up, right } = surrending;
-  bleSetLight(
-    JSON.stringify({
-      colors: [
-        right?.obstacle?.color,
-        right?.obstacle?.color,
-        down?.obstacle?.color,
-        down?.obstacle?.color,
-        left?.obstacle?.color,
-        left?.obstacle?.color,
-        up?.obstacle?.color,
-        up?.obstacle?.color,
-      ].map((c) => "0x" + c),
-      bright: 0.5,
-    })
+  const colors = [right, right, down, down, left, left, up, up].map(
+    joyoDisplayObjectColor
   );
+  log("colors", JSON.stringify(colors));
+  // bleSetLight(
+  //   JSON.stringify({
+  //     colors,
+  //     bright: 0.5,
+  //   })
+  // );
+}
+
+function joyoDisplayObjectColor(object) {
+  const { obstacle, player, distance } = object || {};
+  if (distance > 1) return JOYO_COLOR_UNKNOWN_OBJECT;
+  if (obstacle) {
+    log("obstacle", obstacle);
+    return "0x" + obstacle?.color;
+  }
+  if (player) {
+    return JOYO_COLOR_PLAYER;
+  }
+  return null;
 }
