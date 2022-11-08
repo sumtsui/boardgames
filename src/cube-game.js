@@ -1,8 +1,6 @@
 Array.prototype.map = function (callbackFn) {
   var arr = [];
   for (var i = 0; i < this.length; i++) {
-    /* call the callback function for every value of this array and       push the returned value into our resulting array
-     */
     arr.push(callbackFn(this[i], i, this));
   }
   return arr;
@@ -48,6 +46,17 @@ Array.prototype.includes = function (search, start) {
   }
   return this.indexOf(search, start) !== -1;
 };
+Array.prototype.forEach = function forEach(callback, thisArg) {
+  if (typeof callback !== "function") {
+    throw new TypeError(callback + " is not a function");
+  }
+  var array = this;
+  thisArg = thisArg || this;
+  for (var i = 0, l = array.length; i !== l; ++i) {
+    callback.call(thisArg, array[i], i, array);
+  }
+};
+
 Number.isInteger =
   Number.isInteger ||
   function (value) {
@@ -58,7 +67,6 @@ Number.isInteger =
     );
   };
 
-log("start");
 const TILE_TOTAL = 225;
 const PLAYER_START_TILES = [38, 118, 188, 108];
 const DIRECTIONS = ["down", "left", "up", "right"];
@@ -128,7 +136,7 @@ class Board {
       throw "MISFORMED_OBSTACLE";
     }
 
-    log("generateObstacle", [start, second, third, forth]);
+    // log("generateObstacle", [start, second, third, forth]);
 
     return [start, second, third, forth];
   }
@@ -200,16 +208,18 @@ class Board {
           this.cubeMap[i].obstacle = { ...obstacle, id: start.toString() };
         });
 
+        log("Obstacle", JSON.stringify(newObstacle), obstacle.value);
+
         obstaclePerSurfaceCount[this.cubeMap[start].surface] =
           startCountOnSurface ? startCountOnSurface + 1 : 1;
         obstacleCount++;
         curColorIdx++;
       } catch (err) {
-        log(err, start);
+        // log(err, start);
       }
     }
 
-    log("obstaclePerSurfaceCount", obstaclePerSurfaceCount);
+    // log("obstaclePerSurfaceCount", obstaclePerSurfaceCount);
 
     return { obstacleCount, attempt };
   }
@@ -492,7 +502,7 @@ class Player {
       cubeMap[next].player = this.id;
       cubeMap[this.current].player = null;
       this.current = next;
-      renderCube();
+      // renderCube();
       return;
     }
 
@@ -551,7 +561,10 @@ class Player {
     currentTile.player = undefined;
 
     this._collectObstacles();
-    log("collected obstacles", this.collectedObstacles);
+    log(
+      "Collected obstacles",
+      JSON.stringify(this.collectedObstacles, null, 4)
+    );
 
     if (next === this.goal) {
       if (this._countActuallCollectedObstacles() >= 4) {
@@ -559,7 +572,7 @@ class Player {
       }
     }
 
-    renderCube();
+    // renderCube();
     return result;
   }
   _countActuallCollectedObstacles() {
@@ -653,7 +666,7 @@ const board = new Board();
 const obCount = board.setAllObstactles();
 const cubeMap = board.cubeMap;
 const cubeArrays = board.cubeArrays;
-log("total obstacles", JSON.stringify(obCount));
+log("Obstacles count", JSON.stringify(obCount));
 const players = PLAYER_START_TILES.map(
   (t, i) => new Player(i, t, DIRECTIONS[i])
 );
@@ -664,8 +677,9 @@ const p2 = players[2];
 const p3 = players[3];
 
 // ---------- JOYO integration ---------------
-// clearAllLight();
-// bleSetLightAnimation("run", 3, 0xf9e716);
+clearAllLight();
+bleSetLightAnimation("run", 5, 0x00ffff);
+blePlayMusic("fhed");
 const JOYO_COLOR_ERROR = 0xfe0b36;
 const JOYO_COLOR_WIN = 0xf9e716;
 const JOYO_COLOR_COLIDE = 0x162cf9;
@@ -692,35 +706,46 @@ function When_JOYO_Read(value) {
     !Object.keys(JOYO_PLAYERS_MAP).includes(value.toString()) &&
     !board.cubeMap[value]
   ) {
-    return log("VALUE_NOT_PLAYER_OR_MOVE", value);
+    // log("VALUE_NOT_PLAYER_OR_MOVE", value);
+    return;
   }
 
   // prevent accidentally read same value twice unless it is player number
   if (!lastRead) lastRead = value;
-  else if (lastRead && lastRead === value) return log("SAME_VALUE_READ_TWICE");
-  else lastRead = value;
+  else if (lastRead && lastRead === value) {
+    // log("SAME_VALUE_READ_TWICE");
+    return;
+  } else lastRead = value;
 
   clearAllLight();
 
-  log(value);
+  // log(value);
 
   // error cases
   if (!joyoCurrentPlayer && !JOYO_PLAYERS_MAP[value]) {
     joyoLight(JOYO_COLOR_ERROR);
-    return log("NO_PLAYER_OR_MOVE");
+    // log("NO_PLAYER_OR_MOVE");
+    return;
   }
 
   if (joyoCurrentPlayerHasMoved && !JOYO_PLAYERS_MAP[value]) {
     joyoLight(JOYO_COLOR_ERROR);
-    return log("CURRENT_PLAYER_HAS_MOVED");
+    // log("CURRENT_PLAYER_HAS_MOVED");
+    return;
   }
 
   // happy path
   if (JOYO_PLAYERS_MAP[value]) {
+    blePlayMusic("hred");
     joyoCurrentPlayerHasMoved = false;
     joyoCurrentPlayer = JOYO_PLAYERS_MAP[value];
     joyoLight(JOYO_COLOR_SUCCESS);
     joyoHandleShowSurrending(joyoCurrentPlayer.getSurrounding());
+    log(
+      "Current player",
+      JOYO_PLAYERS_MAP[value].id,
+      JOYO_PLAYERS_MAP[value].current
+    );
   } else if (board.cubeMap[value]) {
     try {
       const result = joyoCurrentPlayer.move(value);
@@ -728,21 +753,23 @@ function When_JOYO_Read(value) {
 
       if (result.win) {
         joyoLight(JOYO_COLOR_WIN);
-        // handle
+        blePlayMusic("gwin");
       } else if (result.collideWithOtherPlayer) {
         joyoLight(JOYO_COLOR_COLIDE);
-        // handle
       } else {
         joyoLight(JOYO_COLOR_SUCCESS);
+        blePlayMusic("chek");
       }
 
       joyoCurrentPlayer = null;
     } catch (e) {
       log("Error", e);
+      blePlayMusic("olwh");
       joyoLight(JOYO_COLOR_ERROR);
     }
   } else {
     log("NOT_RECOGNIZE_VALUE", value);
+    blePlayMusic("olwh");
     joyoLight(JOYO_COLOR_ERROR);
   }
 }
@@ -762,20 +789,18 @@ function joyoHandleShowSurrending(surrending) {
   const colors = [right, right, down, down, left, left, up, up].map(
     joyoDisplayObjectColor
   );
-  log("colors", JSON.stringify(colors));
-  // bleSetLight(
-  //   JSON.stringify({
-  //     colors,
-  //     bright: 0.5,
-  //   })
-  // );
+  bleSetLight(
+    JSON.stringify({
+      colors,
+      bright: 0.5,
+    })
+  );
 }
 
 function joyoDisplayObjectColor(object) {
   const { obstacle, player, distance } = object || {};
   if (distance > 1) return JOYO_COLOR_UNKNOWN_OBJECT;
   if (obstacle) {
-    log("obstacle", obstacle);
     return "0x" + obstacle?.color;
   }
   if (player) {
