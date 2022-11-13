@@ -69,7 +69,7 @@ Number.isInteger =
 
 const TILE_TOTAL = 225;
 const PLAYER_START_TILES = [38, 118, 188, 108];
-const DIRECTIONS = ["down", "left", "up", "right"];
+const PLAYER_START_DIRECTIONS = ["down", "left", "up", "right"];
 const OBSTACLE_TYPES = [
   { value: "red", color: "FF0000" },
   { value: "blue", color: "0000FF" },
@@ -326,12 +326,10 @@ class Board {
     // it is up to the caller to provide correct cross surface tile
     if (a.surface !== b.surface) {
       const { obstacle, player } = b;
-      if (obstacle) return { obstacle };
+      if (obstacle) return { obstacle, distance: 0 };
       if (player) return { player };
+      return null;
     }
-
-    if (a.col !== b.col && a.row !== b.row)
-      throw "can only check vertically or horizontally.";
 
     // horizontal check
     if (a.col !== b.col) {
@@ -481,6 +479,7 @@ class Player {
   collectedObstacles = {};
   goal;
   absoluteDirection;
+  _backHome;
 
   constructor(id, start, absoluteDirection) {
     this.id = id.toString();
@@ -489,9 +488,15 @@ class Player {
     cubeMap[start].player = this.id;
     this.absoluteDirection = absoluteDirection;
     this.win = false;
+    this._backHome = () => {
+      board.cubeMap[this.current].player = undefined;
+      this.current = start;
+      board.cubeMap[this.current].player = this.id;
+      this.absoluteDirection = absoluteDirection;
+    };
   }
   _collectObstacles() {
-    DIRECTIONS.forEach((dir) => {
+    PLAYER_START_DIRECTIONS.forEach((dir) => {
       const tileNum = board.getAdjecentTile(this.current, dir);
       const tile = cubeMap[tileNum];
       if (tile?.obstacle?.id) this.collectedObstacles[tileNum] = tile.obstacle;
@@ -502,14 +507,9 @@ class Player {
       cubeMap[next].player = this.id;
       cubeMap[this.current].player = null;
       this.current = next;
-      // renderCube();
       return;
     }
 
-    const result = {
-      collideWithOtherPlayer: undefined,
-      win: false,
-    };
     const nextTile = cubeMap[next];
 
     if (!nextTile || !IN_PLAY_SURFACES.includes(nextTile.surface))
@@ -518,9 +518,7 @@ class Player {
     const currentTile = cubeMap[this.current];
 
     if (next === this.current) throw "MOVE_FAIL_SAME_TILE";
-    if (nextTile.obstacle) {
-      throw "MOVE_FAIL_OBSTACLE";
-    }
+
     // can only move vertically or horizontally
     if (
       currentTile.col !== nextTile.col &&
@@ -540,18 +538,12 @@ class Player {
         throw "MOVE_FAIL_INVALID_CROSS_SURFACE";
       }
     }
-    // handle same surface long distance move obstacle check
-    else {
-      const thingInPath = board.getThingsInPath(this.current, next);
-      if (thingInPath?.obstacle) throw "MOVE_FAIL_OBSTACLE_INBETWEEN";
-      if (thingInPath?.player) {
-        // todo: handle crash into other player
-        throw "MOVE_FAIL_PLAYER_INBETWEEN";
-      }
-    }
 
-    if (nextTile.player) {
-      result.collideWithOtherPlayer = nextTile.player;
+    // handle colliding with obstacles or players
+    const thingInPath = board.getThingsInPath(this.current, next);
+    if (thingInPath) {
+      this._backHome();
+      return "MOVE_RESULT_COLLIDED";
     }
 
     this.absoluteDirection =
@@ -568,12 +560,11 @@ class Player {
 
     if (next === this.goal) {
       if (this._countActuallCollectedObstacles() >= 4) {
-        result.win = true;
+        return "MOVE_RESULT_WIN";
       }
     }
 
-    // renderCube();
-    return result;
+    return "MOVE_RESULT_DONE";
   }
   _countActuallCollectedObstacles() {
     // pass by same obstacle twice, count as collected that obstacle
@@ -668,7 +659,7 @@ const cubeMap = board.cubeMap;
 const cubeArrays = board.cubeArrays;
 log("Obstacles count", JSON.stringify(obCount));
 const players = PLAYER_START_TILES.map(
-  (t, i) => new Player(i, t, DIRECTIONS[i])
+  (t, i) => new Player(i, t, PLAYER_START_DIRECTIONS[i])
 );
 
 const p0 = players[0];
@@ -676,10 +667,19 @@ const p1 = players[1];
 const p2 = players[2];
 const p3 = players[3];
 
+function move(player, num) {
+  try {
+    player.move(num);
+    renderCube();
+  } catch (error) {
+    console.log(error);
+  }
+}
+
 // ---------- JOYO integration ---------------
-clearAllLight();
-bleSetLightAnimation("run", 5, 0x00ffff);
-blePlayMusic("fhed");
+// clearAllLight();
+// bleSetLightAnimation("run", 5, 0x00ffff);
+// blePlayMusic("fhed");
 const JOYO_COLOR_ERROR = 0xfe0b36;
 const JOYO_COLOR_WIN = 0xf9e716;
 const JOYO_COLOR_COLIDE = 0x162cf9;
@@ -710,7 +710,7 @@ function When_JOYO_Read(value) {
     return;
   }
 
-  // prevent accidentally read same value twice unless it is player number
+  // prevent accidentally read same value twice
   if (!lastRead) lastRead = value;
   else if (lastRead && lastRead === value) {
     // log("SAME_VALUE_READ_TWICE");
