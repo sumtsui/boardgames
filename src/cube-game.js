@@ -165,7 +165,7 @@ class Board {
           return i;
         }
       });
-    const obstaclePerSurfaceCount = {};
+    const obstacleCountPerSurface = {};
     const OBSTACLE_TOTAL = 12;
     const ATTEMPT_TOTAL = 300;
 
@@ -179,15 +179,15 @@ class Board {
       const start = tiles[idx];
 
       try {
-        const startCountOnSurface =
-          obstaclePerSurfaceCount[this.cubeMap[start].surface];
-        if (
-          startCountOnSurface >= Math.ceil(OBSTACLE_TOTAL / 5) ||
-          (this.cubeMap[start].surface === 4 && startCountOnSurface === 2)
-        ) {
-          throw "enough obstacle in surface " + this.cubeMap[start].surface;
-        }
-        const obstacle = OBSTACLE_TYPES[curColorIdx % OBSTACLE_TYPES.length];
+        const obstacleCount =
+          obstacleCountPerSurface[this.cubeMap[start].surface];
+        // if (
+        //   obstacleCount >= Math.ceil(OBSTACLE_TOTAL / 5) ||
+        //   (this.cubeMap[start].surface === 4 && obstacleCount === 2)
+        // ) {
+        //   throw "OBSTACLE_ENOUGH_ON_SAME_SURFACE";
+        // }
+        const currentType = OBSTACLE_TYPES[curColorIdx % OBSTACLE_TYPES.length];
         const newObstacle = this.generateObstacle(start);
 
         newObstacle.forEach((i) => {
@@ -197,7 +197,7 @@ class Board {
           if (
             this.cubeMap[this.getAdjecentTile(i, "up")]?.obstacle ||
             this.cubeMap[this.getAdjecentTile(i, "down")]?.obstacle ||
-            // this.cubeMap[this.getAdjecentTile(i, "left")]?.obstacle || // make it less strict
+            this.cubeMap[this.getAdjecentTile(i, "left")]?.obstacle ||
             this.cubeMap[this.getAdjecentTile(i, "right")]?.obstacle
           ) {
             throw "OBSTACLE_TOO_CROWDED";
@@ -205,13 +205,14 @@ class Board {
         });
         // accept the obstacle
         newObstacle.forEach((i) => {
-          this.cubeMap[i].obstacle = { ...obstacle, id: start.toString() };
+          this.cubeMap[i].obstacle = { ...currentType, id: start.toString() };
         });
 
-        log("Obstacle", JSON.stringify(newObstacle), obstacle.value);
+        log("Obstacle", JSON.stringify(newObstacle), currentType.value);
 
-        obstaclePerSurfaceCount[this.cubeMap[start].surface] =
-          startCountOnSurface ? startCountOnSurface + 1 : 1;
+        obstacleCountPerSurface[this.cubeMap[start].surface] = obstacleCount
+          ? obstacleCount + 1
+          : 1;
         obstacleCount++;
         curColorIdx++;
       } catch (err) {
@@ -219,7 +220,7 @@ class Board {
       }
     }
 
-    // log("obstaclePerSurfaceCount", obstaclePerSurfaceCount);
+    log("obstacleCountPerSurface", obstacleCountPerSurface);
 
     return { obstacleCount, attempt };
   }
@@ -589,16 +590,6 @@ class Player {
 
     return collected;
   }
-  // _countActuallCollectedObstacles() {
-  //   const actuallCollected = {};
-  //   Object.values(this.passedByObstacles).forEach((ob) => {
-  //     if (actuallCollected[ob.value + ob.id])
-  //       actuallCollected[ob.value + ob.id]++;
-  //     else actuallCollected[ob.value + ob.id] = 1;
-  //   });
-
-  //   return Object.values(actuallCollected).filter((count) => count >= 2).length;
-  // }
   _getCrossSurfaceMoveDirection(next) {
     const curTile = cubeMap[this.current];
     const nextTile = cubeMap[next];
