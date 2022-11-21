@@ -185,7 +185,12 @@ class Board {
 
         // validate the obstacle
         newObstacle.forEach((i) => {
-          if (this.cubeMap[i]?.obstacle || PLAYER_START_TILES.includes(i)) {
+          const tile = this.cubeMap[i];
+          // no same color obstacle on same surface
+          if (countPerSurface[tile.surface]?.includes(currentType.value)) {
+            throw "OBSTACLE_COLOR_EXIST";
+          }
+          if (tile?.obstacle || PLAYER_START_TILES.includes(i)) {
             throw "OBSTACLE_CREATE_FAIL";
           }
           if (
@@ -200,7 +205,13 @@ class Board {
 
         // accept the obstacle
         newObstacle.forEach((i) => {
-          this.cubeMap[i].obstacle = { ...currentType, id: start.toString() };
+          const tile = this.cubeMap[i];
+
+          tile.obstacle = { ...currentType, id: start.toString() };
+
+          countPerSurface[tile.surface]
+            ? countPerSurface[tile.surface].push(currentType.value)
+            : (countPerSurface[tile.surface] = [currentType.value]);
         });
 
         log(
@@ -210,9 +221,6 @@ class Board {
           curTypeIdx
         );
 
-        countPerSurface[this.cubeMap[start].surface]
-          ? countPerSurface[this.cubeMap[start].surface].push(currentType.value)
-          : (countPerSurface[this.cubeMap[start].surface] = []);
         obstacleCount++;
         curTypeIdx++;
       } catch (err) {
