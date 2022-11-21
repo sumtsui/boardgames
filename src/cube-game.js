@@ -165,13 +165,14 @@ class Board {
           return i;
         }
       });
-    const obstacleCountPerSurface = {};
+
+    const countPerSurface = {};
     const OBSTACLE_TOTAL = 12;
     const ATTEMPT_TOTAL = 300;
 
     let obstacleCount = 0;
     let attempt = 0;
-    let curColorIdx = 0;
+    let curTypeIdx = 0;
 
     while (obstacleCount < OBSTACLE_TOTAL && attempt < ATTEMPT_TOTAL) {
       attempt++;
@@ -179,17 +180,10 @@ class Board {
       const start = tiles[idx];
 
       try {
-        const obstacleCount =
-          obstacleCountPerSurface[this.cubeMap[start].surface];
-        // if (
-        //   obstacleCount >= Math.ceil(OBSTACLE_TOTAL / 5) ||
-        //   (this.cubeMap[start].surface === 4 && obstacleCount === 2)
-        // ) {
-        //   throw "OBSTACLE_ENOUGH_ON_SAME_SURFACE";
-        // }
-        const currentType = OBSTACLE_TYPES[curColorIdx % OBSTACLE_TYPES.length];
+        const currentType = OBSTACLE_TYPES[curTypeIdx % OBSTACLE_TYPES.length];
         const newObstacle = this.generateObstacle(start);
 
+        // validate the obstacle
         newObstacle.forEach((i) => {
           if (this.cubeMap[i]?.obstacle || PLAYER_START_TILES.includes(i)) {
             throw "OBSTACLE_CREATE_FAIL";
@@ -203,24 +197,30 @@ class Board {
             throw "OBSTACLE_TOO_CROWDED";
           }
         });
+
         // accept the obstacle
         newObstacle.forEach((i) => {
           this.cubeMap[i].obstacle = { ...currentType, id: start.toString() };
         });
 
-        log("Obstacle", JSON.stringify(newObstacle), currentType.value);
+        log(
+          "Obstacle",
+          JSON.stringify(newObstacle),
+          currentType.value,
+          curTypeIdx
+        );
 
-        obstacleCountPerSurface[this.cubeMap[start].surface] = obstacleCount
-          ? obstacleCount + 1
-          : 1;
+        countPerSurface[this.cubeMap[start].surface]
+          ? countPerSurface[this.cubeMap[start].surface].push(currentType.value)
+          : (countPerSurface[this.cubeMap[start].surface] = []);
         obstacleCount++;
-        curColorIdx++;
+        curTypeIdx++;
       } catch (err) {
-        // log(err, start);
+        log(err, start);
       }
     }
 
-    log("obstacleCountPerSurface", obstacleCountPerSurface);
+    log("countPerSurface", countPerSurface);
 
     return { obstacleCount, attempt };
   }
