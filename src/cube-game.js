@@ -56,6 +56,11 @@ Array.prototype.forEach = function forEach(callback, thisArg) {
     callback.call(thisArg, array[i], i, array);
   }
 };
+Object.prototype.values = function values(obj) {
+  return Object.keys(obj).map(function (key) {
+    return obj[key];
+  });
+};
 
 Number.isInteger =
   Number.isInteger ||
@@ -564,35 +569,50 @@ class Player {
     result.collected = this._collectObstacles();
     log("Passedby obstacles", JSON.stringify(this.passedByObstacles, null, 4));
 
-    if (next === this.goal) {
-      if (
-        Object.values(this.passedByObstacles).filter((ob) => ob.collected) >= 4
-      ) {
-        result.win = true;
-      }
-    }
+    result.win = this._checkWin(next);
 
     return result;
   }
+  _checkWin(next) {
+    if (next !== this.goal) return false;
+
+    const collected = Object.values(this.passedByObstacles)
+      .filter((ob) => ob.collected)
+      .map((c) => c.value);
+
+    if (collected.length < 4) {
+      return false;
+    }
+
+    const uniqueCollected = collected.filter((element, index) => {
+      return collected.indexOf(element) === index;
+    });
+
+    return uniqueCollected.length >= 4;
+  }
+  /**
+   * check surroundings for collected obstacles
+   * pass by same obstacle's different side twice, count as collected that obstacle
+   */
   _collectObstacles() {
-    let collected;
+    let collected = false;
     ["down", "left", "up", "right"].forEach((dir) => {
       const tileNum = board.getAdjecentTile(this.current, dir);
       const tile = cubeMap[tileNum];
-      // pass by same obstacle's different side twice, count as collected that obstacle
-      if (tile?.obstacle?.id) {
-        if (
-          this.passedByObstacles[tile.obstacle.id] &&
-          this.passedByObstacles[tile.obstacle.id].tileNum !== tileNum
-        ) {
-          this.passedByObstacles[tile.obstacle.id].collected = true;
-          collected = true;
-        } else {
-          this.passedByObstacles[tile.obstacle.id] = {
-            ...tile.obstacle,
-            tileNum,
-          };
-        }
+      if (!tile || !tile.obstacle) return;
+
+      const passedByObstacle = this.passedByObstacles[tile.obstacle.id];
+
+      if (passedByObstacle?.collected) return;
+
+      if (passedByObstacle && passedByObstacle.tileNum !== tileNum) {
+        passedByObstacle.collected = true;
+        collected = true;
+      } else {
+        this.passedByObstacles[tile.obstacle.id] = {
+          ...tile.obstacle,
+          tileNum,
+        };
       }
     });
 
@@ -688,31 +708,32 @@ const p1 = players[1];
 const p2 = players[2];
 const p3 = players[3];
 
-function move(player, num) {
+function move(player, num, isGod) {
   try {
-    player.move(num);
+    const result = player.move(num, isGod);
     renderCube();
+    return result;
   } catch (error) {
     console.log(error);
   }
 }
 
 // ---------- JOYO integration ---------------
-// clearAllLight();
-// bleSetLightAnimation("run", 5, 0x00ffff);
-// blePlayMusic("fhed");
+clearAllLight();
+bleSetLightAnimation("run", 5, 0x00ffff);
+blePlayMusic("fhed");
 const JOYO_COLOR_ERROR = 0xfe0b36;
 const JOYO_COLOR_WIN = 0xf9e716;
 const JOYO_COLOR_COLLIDE = 0x162cf9;
 const JOYO_COLOR_SUCCESS = 0x16f93d;
-const JOYO_COLOR_COLLECTED = 0x16f93d;
+const JOYO_COLOR_COLLECTED = 0x00ff00;
 const JOYO_COLOR_UNKNOWN_OBJECT = 0xffffff;
-const JOYO_COLOR_PLAYER = 0x00ffff;
+const JOYO_COLOR_PLAYER = 0xee82ee;
 const JOYO_PLAYERS_MAP = {
-  5980: p0,
-  5970: p1,
-  5960: p2,
-  5950: p3,
+  8540: p0,
+  8530: p1,
+  8520: p2,
+  8510: p3,
 };
 const JOYO_OBSTACLE_COLOR_MAP = OBSTACLE_TYPES;
 
@@ -720,17 +741,11 @@ let joyoCurrentPlayer = null;
 let joyoCurrentPlayerHasMoved = false;
 let lastRead = null;
 
-function When_JOYO_Read(value) {
-  // handle reading air
-  value = value - 2500;
+function When_JOYO_Read(read) {
+  const value = joyoStickerNumberMapper(read);
+  // log("after", value);
 
-  if (
-    !Object.keys(JOYO_PLAYERS_MAP).includes(value.toString()) &&
-    !board.cubeMap[value]
-  ) {
-    // log("VALUE_NOT_PLAYER_OR_MOVE", value);
-    return;
-  }
+  if (!value) return;
 
   // prevent accidentally read same value twice
   if (!lastRead) lastRead = value;
@@ -740,8 +755,6 @@ function When_JOYO_Read(value) {
   } else lastRead = value;
 
   clearAllLight();
-
-  // log(value);
 
   // error cases
   if (!joyoCurrentPlayer && !JOYO_PLAYERS_MAP[value]) {
@@ -777,8 +790,10 @@ function When_JOYO_Read(value) {
         blePlayMusic("gwin");
       } else if (result.collided) {
         joyoLight(JOYO_COLOR_COLLIDE);
+        // todo: play crash sound
       } else if (result.collected) {
-        joyoLight(JOYO_COLOR_COLLECTED);
+        // todo: play sound
+        bleSetLightAnimation("star", 5, JOYO_COLOR_COLLECTED);
       } else {
         joyoLight(JOYO_COLOR_SUCCESS);
         blePlayMusic("chek");
@@ -788,11 +803,11 @@ function When_JOYO_Read(value) {
     } catch (e) {
       log("Error", e);
       blePlayMusic("olwh");
-      joyoLight(JOYO_COLOR_ERROR);
+      // joyoLight(JOYO_COLOR_ERROR);
     }
   } else {
     log("NOT_RECOGNIZE_VALUE", value);
-    // blePlayMusic("olwh");
+    blePlayMusic("olwh");
     // joyoLight(JOYO_COLOR_ERROR);
   }
 }
@@ -830,4 +845,15 @@ function joyoDisplayObjectColor(object) {
     return JOYO_COLOR_PLAYER;
   }
   return null;
+}
+
+function joyoStickerNumberMapper(read) {
+  // log("before", read);
+  const PLAYERS = Object.keys(JOYO_PLAYERS_MAP);
+  const RANGE = [2501, 2720];
+  const SUBSET = 2500;
+  if (read >= RANGE[0] && read <= RANGE[1]) return read - SUBSET;
+  if (PLAYERS.includes(read.toString())) return read;
+
+  return undefined;
 }
