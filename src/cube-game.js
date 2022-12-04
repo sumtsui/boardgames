@@ -790,9 +790,9 @@ function When_JOYO_Read(read) {
         blePlayMusic("gwin");
       } else if (result.collided) {
         joyoLight(JOYO_COLOR_COLLIDE);
-        // todo: play crash sound
+        blePlayMusic("olwh");
       } else if (result.collected) {
-        // todo: play sound
+        blePlayMusic("hred");
         bleSetLightAnimation("star", 5, JOYO_COLOR_COLLECTED);
       } else {
         joyoLight(JOYO_COLOR_SUCCESS);
