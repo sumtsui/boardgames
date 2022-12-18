@@ -91,9 +91,11 @@ function log(...val) {
 class Board {
   cubeArrays;
   cubeMap;
+  obstacles;
   constructor() {
     this.cubeArrays = this._getCubeArrays();
     this.cubeMap = this._getCubeMap(this.cubeArrays);
+    this.obstacles = this._setAllObstactles();
   }
   _checkDirection(from, to) {
     const fromTile = this.cubeMap[from];
@@ -105,7 +107,7 @@ class Board {
       return "down";
     }
   }
-  generateObstacle(start) {
+  _generateObstacle(start) {
     function repeat(arr) {
       let lastPick = null;
       return () => {
@@ -144,7 +146,7 @@ class Board {
 
     return [start, second, third, forth];
   }
-  setAllObstactles() {
+  _setAllObstactles() {
     const EDGES = {
       5: {
         col: 4,
@@ -173,6 +175,7 @@ class Board {
     const countPerSurface = {};
     const OBSTACLE_TOTAL = 12;
     const ATTEMPT_TOTAL = 300;
+    const result = [];
 
     let obstacleCount = 0;
     let attempt = 0;
@@ -185,7 +188,7 @@ class Board {
 
       try {
         const currentType = OBSTACLE_TYPES[curTypeIdx % OBSTACLE_TYPES.length];
-        const newObstacle = this.generateObstacle(start);
+        const newObstacle = this._generateObstacle(start);
 
         // validate the obstacle
         newObstacle.forEach((i) => {
@@ -210,8 +213,9 @@ class Board {
         // accept the obstacle
         newObstacle.forEach((i) => {
           const tile = this.cubeMap[i];
-
-          tile.obstacle = { ...currentType, id: start.toString() };
+          const ob = { ...currentType, id: start.toString() };
+          tile.obstacle = ob;
+          result.push(ob);
 
           countPerSurface[tile.surface]
             ? countPerSurface[tile.surface].push(currentType.value)
@@ -233,8 +237,9 @@ class Board {
     }
 
     log("countPerSurface", countPerSurface);
+    log("obstacleCount", obstacleCount, "attempt", attempt);
 
-    return { obstacleCount, attempt };
+    return result;
   }
   getAdjecentTile(tileNum, dir) {
     const dirs = ["up", "down", "left", "right"];
@@ -462,6 +467,16 @@ class Board {
     if (this.cubeMap[prev]) this.cubeMap[prev].player = undefined;
     this.cubeMap[next].player = player;
   }
+  handleObstacleCollected(obstacleId, playId) {
+    this.obstacles
+      .filter((ob) => ob.id === obstacleId)
+      .forEach((ob) => (ob.collectedBy = playId));
+  }
+  handleObstacleLost(obstacleId) {
+    this.obstacles
+      .filter((ob) => ob.id === obstacleId)
+      .forEach((ob) => (ob.collectedBy = undefined));
+  }
 }
 
 class Player {
@@ -616,15 +631,17 @@ class Player {
     ["down", "left", "up", "right"].forEach((dir) => {
       const tileNum = board.getAdjecentTile(this.current, dir);
       const tile = cubeMap[tileNum];
-      if (!tile || !tile.obstacle) return;
+      if (!tile || !tile.obstacle || tile.obstacle.collectedBy) return;
 
       const passedByObstacle = this.passedByObstacles[tile.obstacle.id];
 
       if (passedByObstacle?.collected) return;
 
+      // check if current passedby is a different side of a already passedby obstacle, if yes, it is collected by the player
       if (passedByObstacle && passedByObstacle.tileNum !== tileNum) {
         passedByObstacle.collected = true;
         collected = true;
+        board.handleObstacleCollected(tile.obstacle.id, this.id);
       } else {
         this.passedByObstacles[tile.obstacle.id] = {
           ...tile.obstacle,
@@ -716,10 +733,8 @@ class Player {
 
 // --------- game init ------------
 const board = new Board();
-const obCount = board.setAllObstactles();
 const cubeMap = board.cubeMap;
 const cubeArrays = board.cubeArrays;
-log("Obstacles count", JSON.stringify(obCount));
 
 function initPlayer(id) {
   const p = new Player(id.toString());
