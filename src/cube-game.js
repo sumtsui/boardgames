@@ -525,6 +525,7 @@ class Player {
   absoluteDirection;
   start;
   startDir;
+  _collectedObstacleTypes = {};
 
   constructor(id) {
     this.id = id.toString();
@@ -632,6 +633,7 @@ class Player {
       const tileNum = board.getAdjecentTile(this.current, dir);
       const tile = cubeMap[tileNum];
       if (!tile || !tile.obstacle || tile.obstacle.collectedBy) return;
+      if (this._collectedObstacleTypes[tile.obstacle.value]) return; // can't collect same type of obstacles twice
 
       const passedByObstacle = this.passedByObstacles[tile.obstacle.id];
 
@@ -641,6 +643,7 @@ class Player {
       if (passedByObstacle && passedByObstacle.tileNum !== tileNum) {
         passedByObstacle.collected = true;
         collected = true;
+        this._collectedObstacleTypes[passedByObstacle.value] = true;
         board.handleObstacleCollected(tile.obstacle.id, this.id);
       } else {
         this.passedByObstacles[tile.obstacle.id] = {
