@@ -74,7 +74,6 @@ Number.isInteger =
 
 const TILE_TOTAL = 225;
 const PLAYER_START_TILES = [38, 118, 188, 108];
-const PLAYER_START_DIRECTIONS = ["down", "left", "up", "right"];
 const OBSTACLE_TYPES = [
   { value: "red", color: "FF0000" },
   { value: "blue", color: "0000FF" },
@@ -459,14 +458,30 @@ class Board {
 
     return result;
   }
+  handlePlayerMoved(prev, next, player) {
+    if (this.cubeMap[prev]) this.cubeMap[prev].player = undefined;
+    this.cubeMap[next].player = player;
+  }
 }
 
 class Player {
-  static GOAL_MAP = {
-    0: 2,
-    1: 3,
-    2: 0,
-    3: 1,
+  static ATTRIBUTES_BY_STARTING_SURFACE = {
+    1: {
+      dir: "down",
+      goal: 188,
+    },
+    3: {
+      dir: "right",
+      goal: 118,
+    },
+    5: {
+      dir: "left",
+      goal: 108,
+    },
+    7: {
+      dir: "up",
+      goal: 38,
+    },
   };
   static DIRECTION_MAP = {
     down: {
@@ -489,39 +504,47 @@ class Player {
     },
   };
   id;
-  current;
+  current = null;
   passedByObstacles = {};
   goal;
   absoluteDirection;
-  _backHome;
+  start;
+  startDir;
 
-  constructor(id, start, absoluteDirection) {
+  constructor(id) {
     this.id = id.toString();
-    this.current = start;
-    this.goal = PLAYER_START_TILES[Player.GOAL_MAP[id]];
-    cubeMap[start].player = this.id;
-    this.absoluteDirection = absoluteDirection;
     this.win = false;
-    this._backHome = () => {
-      board.cubeMap[this.current].player = undefined;
-      this.current = start;
-      board.cubeMap[this.current].player = this.id;
-      this.absoluteDirection = absoluteDirection;
-    };
   }
-  move(next, isGod) {
-    if (isGod) {
-      cubeMap[next].player = this.id;
-      cubeMap[this.current].player = null;
-      this.current = next;
-      return;
-    }
-
+  move(next) {
     const nextTile = cubeMap[next];
 
     if (!nextTile || !IN_PLAY_SURFACES.includes(nextTile.surface))
       throw "MOVE_FAIL_UNKNOWN_TILE";
 
+    const result = {
+      collided: false,
+      collected: false,
+      win: false,
+      prev: this.current,
+      current: next,
+    };
+
+    // handle player's first move
+    if (!this.current) {
+      this.current = next;
+      this.start = next;
+      cubeMap[next].player = this.id;
+      this.goal =
+        Player.ATTRIBUTES_BY_STARTING_SURFACE[cubeMap[next].surface].goal;
+      this.absoluteDirection =
+        Player.ATTRIBUTES_BY_STARTING_SURFACE[cubeMap[next].surface].dir;
+      this.startDir =
+        Player.ATTRIBUTES_BY_STARTING_SURFACE[cubeMap[next].surface].dir;
+      result.collected = this._collectObstacles();
+      return result;
+    }
+
+    // move validation
     const currentTile = cubeMap[this.current];
 
     if (next === this.current) throw "MOVE_FAIL_SAME_TILE";
@@ -546,25 +569,19 @@ class Player {
       }
     }
 
-    const result = {
-      collided: false,
-      collected: false,
-      win: false,
-    };
-
     // handle colliding with obstacles or players
     const thingInPath = board.getThingsInPath(this.current, next);
     if (thingInPath) {
-      this._backHome();
       result.collided = true;
+      result.prev = this.current;
+      result.current = this.start;
+      this._backHome();
       return result;
     }
 
     this.absoluteDirection =
       this._getDirectionChange(next) || this.absoluteDirection;
     this.current = next;
-    nextTile.player = this.id;
-    currentTile.player = undefined;
 
     result.collected = this._collectObstacles();
     log("Passedby obstacles", JSON.stringify(this.passedByObstacles, null, 4));
@@ -691,6 +708,10 @@ class Player {
 
     return result;
   }
+  _backHome() {
+    this.current = this.start;
+    this.absoluteDirection = this.startDir;
+  }
 }
 
 // --------- game init ------------
@@ -699,18 +720,17 @@ const obCount = board.setAllObstactles();
 const cubeMap = board.cubeMap;
 const cubeArrays = board.cubeArrays;
 log("Obstacles count", JSON.stringify(obCount));
-const players = PLAYER_START_TILES.map(
-  (t, i) => new Player(i, t, PLAYER_START_DIRECTIONS[i])
-);
 
-const p0 = players[0];
-const p1 = players[1];
-const p2 = players[2];
-const p3 = players[3];
+function initPlayer(id) {
+  const p = new Player(id.toString());
+  return p;
+}
 
-function move(player, num, isGod) {
+// for browser testing
+function move(player, num) {
   try {
-    const result = player.move(num, isGod);
+    const result = player.move(num);
+    board.handlePlayerMoved(result.prev, result.current, player);
     renderCube();
     return result;
   } catch (error) {
@@ -784,6 +804,8 @@ function When_JOYO_Read(read) {
     try {
       const result = joyoCurrentPlayer.move(value);
       joyoCurrentPlayerHasMoved = true;
+
+      board.handlePlayerMoved(result.prev, result.current, player);
 
       if (result.win) {
         joyoLight(JOYO_COLOR_WIN);
