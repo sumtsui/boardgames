@@ -477,6 +477,10 @@ class Board {
       .filter((ob) => ob.id === obstacleId)
       .forEach((ob) => (ob.collectedBy = undefined));
   }
+  handleCollectionTrading(tileNum) {
+    // const tile = this.cubeMap[tileNum]
+    // if (tile.obstacle)
+  }
 }
 
 class Player {
@@ -531,14 +535,45 @@ class Player {
     this.id = id.toString();
     this.win = false;
   }
-  move(next) {
+  _validateMove(current, next, isBackToStart) {
+    const currentTile = cubeMap[current];
+    const nextTile = cubeMap[next];
+
+    if (next === current) throw "MOVE_FAIL_SAME_TILE";
+
+    // player can always go back to the starting tile if the starting tile is unoccupied,
+    // usually as a way of punishment.
+    if (isBackToStart && nextTile.surface === cubeMap[this.start].surface) {
+      return;
+    }
+    if (
+      currentTile.col !== nextTile.col &&
+      currentTile.row !== nextTile.row &&
+      currentTile.surface === nextTile.surface
+    )
+      // can only move vertically or horizontally
+      throw "MOVE_FAIL_NOT_ALLOW";
+
+    // handle crossing surface move
+    if (currentTile.surface !== nextTile.surface) {
+      if (
+        board.getAdjecentTile(
+          current,
+          this._getCrossSurfaceMoveDirection(next)
+        ) !== next
+      ) {
+        throw "MOVE_FAIL_INVALID_CROSS_SURFACE";
+      }
+    }
+  }
+  move(next, isBackToStart) {
     const nextTile = cubeMap[next];
 
     if (!nextTile || !IN_PLAY_SURFACES.includes(nextTile.surface))
       throw "MOVE_FAIL_UNKNOWN_TILE";
 
     const result = {
-      collided: false,
+      crashed: undefined,
       collected: false,
       win: false,
       prev: this.current,
@@ -560,44 +595,25 @@ class Player {
       return result;
     }
 
-    // move validation
-    const currentTile = cubeMap[this.current];
+    this._validateMove(this.current, next, isBackToStart);
 
-    if (next === this.current) throw "MOVE_FAIL_SAME_TILE";
+    this.absoluteDirection = isBackToStart
+      ? this.startDir
+      : this._getDirectionChange(next);
 
-    // can only move vertically or horizontally
-    if (
-      currentTile.col !== nextTile.col &&
-      currentTile.row !== nextTile.row &&
-      currentTile.surface === nextTile.surface
-    )
-      throw "MOVE_FAIL_NOT_ALLOW";
-
-    // handle crossing surface move
-    if (currentTile.surface !== nextTile.surface) {
-      if (
-        board.getAdjecentTile(
-          this.current,
-          this._getCrossSurfaceMoveDirection(next)
-        ) !== next
-      ) {
-        throw "MOVE_FAIL_INVALID_CROSS_SURFACE";
+    // check colliding with obstacles or players
+    const thingInPath = board.getThingsInPath(this.current, next);
+    if (thingInPath) {
+      if (thingInPath.obstacle) {
+        result.crashed = "obstacle";
+      } else if (thingInPath.player) {
+        result.crashed = "player";
       }
     }
 
-    // handle colliding with obstacles or players
-    const thingInPath = board.getThingsInPath(this.current, next);
-    if (thingInPath) {
-      result.collided = true;
-      result.prev = this.current;
-      result.current = this.start;
-      this._backHome();
-      return result;
-    }
-
-    this.absoluteDirection =
-      this._getDirectionChange(next) || this.absoluteDirection;
     this.current = next;
+
+    if (result.crashed) return result;
 
     result.collected = this._collectObstacles();
     log("Passedby obstacles", JSON.stringify(this.passedByObstacles, null, 4));
@@ -728,10 +744,6 @@ class Player {
 
     return result;
   }
-  _backHome() {
-    this.current = this.start;
-    this.absoluteDirection = this.startDir;
-  }
 }
 
 // --------- game init ------------
@@ -744,10 +756,10 @@ function initPlayer(id) {
   return p;
 }
 
-// for browser testing
-function move(player, num) {
+// for browser testing, render after each move
+function move(player, num, isBackHome) {
   try {
-    const result = player.move(num);
+    const result = player.move(num, isBackHome);
     board.handlePlayerMoved(result.prev, result.current, player);
     renderCube();
     return result;
@@ -755,6 +767,11 @@ function move(player, num) {
     console.log(error);
   }
 }
+const players = new Array(4).map((_, idx) => new Player(idx));
+const p0 = players[0];
+const p1 = players[1];
+const p2 = players[2];
+const p3 = players[3];
 
 // ---------- JOYO integration ---------------
 clearAllLight();
@@ -762,7 +779,8 @@ bleSetLightAnimation("run", 5, 0x00ffff);
 blePlayMusic("fhed");
 const JOYO_COLOR_ERROR = 0xfe0b36;
 const JOYO_COLOR_WIN = 0xf9e716;
-const JOYO_COLOR_COLLIDE = 0x162cf9;
+const JOYO_COLOR_CRASH_OBSTACLE = 0x162cf9;
+const JOYO_COLOR_CRASH_PLAYER = 0x162cf9;
 const JOYO_COLOR_SUCCESS = 0x16f93d;
 const JOYO_COLOR_COLLECTED = 0x00ff00;
 const JOYO_COLOR_UNKNOWN_OBJECT = 0xffffff;
@@ -778,6 +796,7 @@ const JOYO_OBSTACLE_COLOR_MAP = OBSTACLE_TYPES;
 let joyoCurrentPlayer = null;
 let joyoCurrentPlayerHasMoved = false;
 let lastRead = null;
+let isPlayerCrashIntoAnotherPlayer = false;
 
 function When_JOYO_Read(read) {
   const value = joyoStickerNumberMapper(read);
@@ -820,7 +839,10 @@ function When_JOYO_Read(read) {
     );
   } else if (board.cubeMap[value]) {
     try {
-      const result = joyoCurrentPlayer.move(value);
+      const result = joyoCurrentPlayer.move(
+        value,
+        isPlayerCrashIntoAnotherPlayer
+      );
       joyoCurrentPlayerHasMoved = true;
 
       board.handlePlayerMoved(result.prev, result.current, player);
@@ -828,9 +850,14 @@ function When_JOYO_Read(read) {
       if (result.win) {
         joyoLight(JOYO_COLOR_WIN);
         blePlayMusic("gwin");
-      } else if (result.collided) {
-        joyoLight(JOYO_COLOR_COLLIDE);
+      } else if (result.crashed === "obstacle") {
+        joyoLight(JOYO_COLOR_CRASH_OBSTACLE);
         blePlayMusic("olwh");
+      } else if (result.crashed === "player") {
+        // todo
+        joyoLight(JOYO_COLOR_CRASH_PLAYER);
+        isPlayerCrashIntoAnotherPlayer = true;
+        return;
       } else if (result.collected) {
         blePlayMusic("hred");
         bleSetLightAnimation("star", 5, JOYO_COLOR_COLLECTED);
@@ -840,15 +867,14 @@ function When_JOYO_Read(read) {
       }
 
       joyoCurrentPlayer = null;
+      isPlayerCrashIntoAnotherPlayer = false;
     } catch (e) {
       log("Error", e);
       blePlayMusic("olwh");
-      // joyoLight(JOYO_COLOR_ERROR);
     }
   } else {
     log("NOT_RECOGNIZE_VALUE", value);
     blePlayMusic("olwh");
-    // joyoLight(JOYO_COLOR_ERROR);
   }
 }
 
