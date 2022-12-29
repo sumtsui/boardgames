@@ -88,6 +88,18 @@ function log(...val) {
   else print(...val);
 }
 
+class Obstacle {
+  value;
+  color;
+  id;
+  collectedBy = null;
+  constructor({ value, color, id }) {
+    this.value = value;
+    this.color = color;
+    this.id = id;
+  }
+}
+
 class Board {
   cubeArrays;
   cubeMap;
@@ -213,7 +225,11 @@ class Board {
         // accept the obstacle
         newObstacle.forEach((i) => {
           const tile = this.cubeMap[i];
-          const ob = { ...currentType, id: start.toString() };
+          const ob = new Obstacle({
+            ...currentType,
+            id: start.toString(),
+          });
+
           tile.obstacle = ob;
           result.push(ob);
 
@@ -477,9 +493,27 @@ class Board {
       .filter((ob) => ob.id === obstacleId)
       .forEach((ob) => (ob.collectedBy = undefined));
   }
-  handleCollectionTrading(tileNum) {
-    // const tile = this.cubeMap[tileNum]
-    // if (tile.obstacle)
+  handleCollectionTrading(tileNum, player1, player2) {
+    const tile = this.cubeMap[tileNum];
+    if (
+      !tile ||
+      !tile.obstacle ||
+      (tile.obstacle.collectedBy !== player1.id &&
+        tile.obstacle.collectedBy !== player2.id)
+    )
+      throw "TRADE_OBSTACLE_FAIL";
+
+    const { obstacle } = tile;
+    if (obstacle.collectedBy === player1.id) {
+      this.handleObstacleCollected(obstacle.id, player2.id);
+      this.handleObstacleLost(obstacle.id, player1.id);
+    } else {
+      this.handleObstacleCollected(obstacle.id, player1.id);
+      this.handleObstacleLost(obstacle.id, player2.id);
+    }
+
+    // todo: align player collection record with board collection record
+    // todo: handle player go home
   }
 }
 
@@ -605,9 +639,9 @@ class Player {
     const thingInPath = board.getThingsInPath(this.current, next);
     if (thingInPath) {
       if (thingInPath.obstacle) {
-        result.crashed = "obstacle";
+        result.crashed = thingInPath.obstacle;
       } else if (thingInPath.player) {
-        result.crashed = "player";
+        result.crashed = thingInPath.player;
       }
     }
 
@@ -622,22 +656,19 @@ class Player {
 
     return result;
   }
+  checkCollectedObstacles() {
+    const collected = Object.values(this.passedByObstacles).filter(
+      (ob) => ob.collected
+    );
+
+    return collected;
+  }
   _checkWin(next) {
     if (next !== this.goal) return false;
 
-    const collected = Object.values(this.passedByObstacles)
-      .filter((ob) => ob.collected)
-      .map((c) => c.value);
+    const collected = this.checkCollectedObstacles().map((c) => c.value);
 
-    if (collected.length < 4) {
-      return false;
-    }
-
-    const uniqueCollected = collected.filter((element, index) => {
-      return collected.indexOf(element) === index;
-    });
-
-    return uniqueCollected.length >= 4;
+    return collected.length >= 4;
   }
   /**
    * check surroundings for collected obstacles
@@ -751,11 +782,6 @@ const board = new Board();
 const cubeMap = board.cubeMap;
 const cubeArrays = board.cubeArrays;
 
-function initPlayer(id) {
-  const p = new Player(id.toString());
-  return p;
-}
-
 // for browser testing, render after each move
 function move(player, num, isBackHome) {
   try {
@@ -794,9 +820,8 @@ const JOYO_PLAYERS_MAP = {
 const JOYO_OBSTACLE_COLOR_MAP = OBSTACLE_TYPES;
 
 let joyoCurrentPlayer = null;
-let joyoCurrentPlayerHasMoved = false;
 let lastRead = null;
-let isPlayerCrashIntoAnotherPlayer = false;
+let playerBeingCrashed = null;
 
 function When_JOYO_Read(read) {
   const value = joyoStickerNumberMapper(read);
@@ -807,28 +832,33 @@ function When_JOYO_Read(read) {
   // prevent accidentally read same value twice
   if (!lastRead) lastRead = value;
   else if (lastRead && lastRead === value) {
-    // log("SAME_VALUE_READ_TWICE");
     return;
   } else lastRead = value;
 
   clearAllLight();
 
-  // error cases
-  if (!joyoCurrentPlayer && !JOYO_PLAYERS_MAP[value]) {
-    joyoLight(JOYO_COLOR_ERROR);
-    // log("NO_PLAYER_OR_MOVE");
+  if (playerBeingCrashed) {
+    try {
+      board.handleCollectionTrading(
+        value,
+        joyoCurrentPlayer,
+        playerBeingCrashed
+      );
+      playerBeingCrashed = null;
+    } catch {
+      blePlayMusic("olwh");
+    }
     return;
   }
 
-  if (joyoCurrentPlayerHasMoved && !JOYO_PLAYERS_MAP[value]) {
+  // error if no current player and current scan value is not a player tile
+  if (!joyoCurrentPlayer && !JOYO_PLAYERS_MAP[value]) {
     joyoLight(JOYO_COLOR_ERROR);
-    // log("CURRENT_PLAYER_HAS_MOVED");
     return;
   }
 
   if (JOYO_PLAYERS_MAP[value]) {
     blePlayMusic("hred");
-    joyoCurrentPlayerHasMoved = false;
     joyoCurrentPlayer = JOYO_PLAYERS_MAP[value];
     joyoLight(JOYO_COLOR_SUCCESS);
     joyoHandleShowSurrending(joyoCurrentPlayer.getSurrounding());
@@ -839,24 +869,19 @@ function When_JOYO_Read(read) {
     );
   } else if (board.cubeMap[value]) {
     try {
-      const result = joyoCurrentPlayer.move(
-        value,
-        isPlayerCrashIntoAnotherPlayer
-      );
-      joyoCurrentPlayerHasMoved = true;
+      const result = joyoCurrentPlayer.move(value);
 
       board.handlePlayerMoved(result.prev, result.current, player);
 
       if (result.win) {
         joyoLight(JOYO_COLOR_WIN);
         blePlayMusic("gwin");
-      } else if (result.crashed === "obstacle") {
+      } else if (result.crashed instanceof Obstacle) {
         joyoLight(JOYO_COLOR_CRASH_OBSTACLE);
         blePlayMusic("olwh");
-      } else if (result.crashed === "player") {
-        // todo
+      } else if (result.crashed instanceof Player) {
         joyoLight(JOYO_COLOR_CRASH_PLAYER);
-        isPlayerCrashIntoAnotherPlayer = true;
+        playerBeingCrashed = result.crashed;
         return;
       } else if (result.collected) {
         blePlayMusic("hred");
@@ -865,9 +890,6 @@ function When_JOYO_Read(read) {
         joyoLight(JOYO_COLOR_SUCCESS);
         blePlayMusic("chek");
       }
-
-      joyoCurrentPlayer = null;
-      isPlayerCrashIntoAnotherPlayer = false;
     } catch (e) {
       log("Error", e);
       blePlayMusic("olwh");
