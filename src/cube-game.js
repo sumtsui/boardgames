@@ -479,6 +479,13 @@ class Board {
 
     return result;
   }
+  getCollectionByPlayer(playerId) {
+    return this.obstacles.reduce((accu, cur) => {
+      if (cur.collectedBy === playerId && !accu.includes(cur.value))
+        accu.push(cur.value);
+      return accu;
+    }, []);
+  }
   handlePlayerMoved(prev, next, player) {
     if (this.cubeMap[prev]) this.cubeMap[prev].player = undefined;
     this.cubeMap[next].player = player;
@@ -506,14 +513,9 @@ class Board {
     const { obstacle } = tile;
     if (obstacle.collectedBy === player1.id) {
       this.handleObstacleCollected(obstacle.id, player2.id);
-      this.handleObstacleLost(obstacle.id, player1.id);
     } else {
       this.handleObstacleCollected(obstacle.id, player1.id);
-      this.handleObstacleLost(obstacle.id, player2.id);
     }
-
-    // todo: align player collection record with board collection record
-    // todo: handle player go home
   }
 }
 
@@ -563,7 +565,6 @@ class Player {
   absoluteDirection;
   start;
   startDir;
-  _collectedObstacleTypes = {};
 
   constructor(id) {
     this.id = id.toString();
@@ -656,19 +657,10 @@ class Player {
 
     return result;
   }
-  checkCollectedObstacles() {
-    const collected = Object.values(this.passedByObstacles).filter(
-      (ob) => ob.collected
-    );
-
-    return collected;
-  }
   _checkWin(next) {
     if (next !== this.goal) return false;
 
-    const collected = this.checkCollectedObstacles().map((c) => c.value);
-
-    return collected.length >= 4;
+    return board.getCollectionByPlayer(this.id).length >= 4;
   }
   /**
    * check surroundings for collected obstacles
@@ -680,17 +672,14 @@ class Player {
       const tileNum = board.getAdjecentTile(this.current, dir);
       const tile = cubeMap[tileNum];
       if (!tile || !tile.obstacle || tile.obstacle.collectedBy) return;
-      if (this._collectedObstacleTypes[tile.obstacle.value]) return; // can't collect same type of obstacles twice
+      if (board.getCollectionByPlayer(this.id).includes(tile.obstacle.value))
+        return; // can't collect same type of obstacles twice
 
       const passedByObstacle = this.passedByObstacles[tile.obstacle.id];
 
-      if (passedByObstacle?.collected) return;
-
       // check if current passedby is a different side of a already passedby obstacle, if yes, it is collected by the player
       if (passedByObstacle && passedByObstacle.tileNum !== tileNum) {
-        passedByObstacle.collected = true;
         collected = true;
-        this._collectedObstacleTypes[passedByObstacle.value] = true;
         board.handleObstacleCollected(tile.obstacle.id, this.id);
       } else {
         this.passedByObstacles[tile.obstacle.id] = {
@@ -777,6 +766,16 @@ class Player {
   }
 }
 
+// class Game {
+//   players = {};
+//   board;
+//   winner;
+//   constructor(players, board) {
+//     this.board = board;
+//     players.forEach((p) => (this.players[p.id] = { collectionTypes: [] }));
+//   }
+// }
+
 // --------- game init ------------
 const board = new Board();
 const cubeMap = board.cubeMap;
@@ -798,6 +797,8 @@ const p0 = players[0];
 const p1 = players[1];
 const p2 = players[2];
 const p3 = players[3];
+
+// const game = new Game(players, board);
 
 // ---------- JOYO integration ---------------
 clearAllLight();
