@@ -724,6 +724,7 @@ class Player {
     throw "FAIL_DETACT_DIRECTION";
   }
   getSurrounding() {
+    if (!this.current) return {};
     // relative directions based on current player front facing absoluteDirection
     const sur = this._getAbsoluteSurrounding(this.current);
     if (this.absoluteDirection === "up") return sur;
@@ -866,13 +867,16 @@ function When_JOYO_Read(read) {
     log(
       "Current player",
       JOYO_PLAYERS_MAP[value].id,
-      JOYO_PLAYERS_MAP[value].current
+      JOYO_PLAYERS_MAP[value].current,
+      board.getCollectionByPlayer(joyoCurrentPlayer).toString()
     );
   } else if (board.cubeMap[value]) {
     try {
       const result = joyoCurrentPlayer.move(value);
 
-      board.handlePlayerMoved(result.prev, result.current, player);
+      board.handlePlayerMoved(result.prev, result.current, joyoCurrentPlayer);
+
+      log(board.getCollectionByPlayer(joyoCurrentPlayer).toString());
 
       if (result.win) {
         joyoLight(JOYO_COLOR_WIN);
