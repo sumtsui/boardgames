@@ -511,11 +511,23 @@ class Board {
       throw "TRADE_OBSTACLE_FAIL";
 
     const { obstacle } = tile;
+    let tradedTo = null;
     if (obstacle.collectedBy === player1.id) {
+      tradedTo = player2;
       this.handleObstacleCollected(obstacle.id, player2.id);
     } else {
+      tradedTo = player1;
       this.handleObstacleCollected(obstacle.id, player1.id);
     }
+    return { tradedTo };
+  }
+  handlePlayerCrashedToAnotherPlayer(tileNum, player1, player2) {
+    const goingHomePlayer = this.handleCollectionTrading(
+      tileNum,
+      player1,
+      player2
+    ).tradedTo;
+    goingHomePlayer.move(null, true);
   }
 }
 
@@ -570,17 +582,12 @@ class Player {
     this.id = id.toString();
     this.win = false;
   }
-  _validateMove(current, next, isBackToStart) {
+  _validateMove(current, next) {
     const currentTile = cubeMap[current];
     const nextTile = cubeMap[next];
 
     if (next === current) throw "MOVE_FAIL_SAME_TILE";
 
-    // player can always go back to the starting tile if the starting tile is unoccupied,
-    // usually as a way of punishment.
-    if (isBackToStart && nextTile.surface === cubeMap[this.start].surface) {
-      return;
-    }
     if (
       currentTile.col !== nextTile.col &&
       currentTile.row !== nextTile.row &&
@@ -602,6 +609,11 @@ class Player {
     }
   }
   move(next, isBackToStart) {
+    if (isBackToStart) {
+      this.current = this.start;
+      return;
+    }
+
     const nextTile = cubeMap[next];
 
     if (!nextTile || !IN_PLAY_SURFACES.includes(nextTile.surface))
@@ -630,7 +642,7 @@ class Player {
       return result;
     }
 
-    this._validateMove(this.current, next, isBackToStart);
+    this._validateMove(this.current, next);
 
     this.absoluteDirection = isBackToStart
       ? this.startDir
@@ -683,7 +695,7 @@ class Player {
         board.handleObstacleCollected(tile.obstacle.id, this.id);
       } else {
         this.passedByObstacles[tile.obstacle.id] = {
-          ...tile.obstacle,
+          id: tile.obstacle.id,
           tileNum,
         };
       }
@@ -808,7 +820,7 @@ blePlayMusic("fhed");
 const JOYO_COLOR_ERROR = 0xfe0b36;
 const JOYO_COLOR_WIN = 0xf9e716;
 const JOYO_COLOR_CRASH_OBSTACLE = 0x162cf9;
-const JOYO_COLOR_CRASH_PLAYER = 0x162cf9;
+const JOYO_COLOR_CRASH_PLAYER = 0xf44336;
 const JOYO_COLOR_SUCCESS = 0x16f93d;
 const JOYO_COLOR_COLLECTED = 0x00ff00;
 const JOYO_COLOR_UNKNOWN_OBJECT = 0xffffff;
@@ -841,13 +853,16 @@ function When_JOYO_Read(read) {
 
   if (playerBeingCrashed) {
     try {
-      board.handleCollectionTrading(
+      board.handlePlayerCrashedToAnotherPlayer(
         value,
         joyoCurrentPlayer,
         playerBeingCrashed
       );
       playerBeingCrashed = null;
-    } catch {
+      joyoLight(JOYO_COLOR_SUCCESS);
+      blePlayMusic("chek");
+    } catch (err) {
+      log(err.message);
       blePlayMusic("olwh");
     }
     return;
@@ -868,7 +883,7 @@ function When_JOYO_Read(read) {
       "Current player",
       JOYO_PLAYERS_MAP[value].id,
       JOYO_PLAYERS_MAP[value].current,
-      board.getCollectionByPlayer(joyoCurrentPlayer).toString()
+      board.getCollectionByPlayer(joyoCurrentPlayer.id).toString()
     );
   } else if (board.cubeMap[value]) {
     try {
@@ -876,17 +891,27 @@ function When_JOYO_Read(read) {
 
       board.handlePlayerMoved(result.prev, result.current, joyoCurrentPlayer);
 
-      log(board.getCollectionByPlayer(joyoCurrentPlayer).toString());
+      log(board.getCollectionByPlayer(joyoCurrentPlayer.id).toString());
 
       if (result.win) {
         joyoLight(JOYO_COLOR_WIN);
         blePlayMusic("gwin");
       } else if (result.crashed instanceof Obstacle) {
+        joyoCurrentPlayer.move(null, true);
         joyoLight(JOYO_COLOR_CRASH_OBSTACLE);
         blePlayMusic("olwh");
       } else if (result.crashed instanceof Player) {
-        joyoLight(JOYO_COLOR_CRASH_PLAYER);
-        playerBeingCrashed = result.crashed;
+        // very edge case, both offender and victim of a crash has not collect anything yet
+        if (
+          board.getCollectionByPlayer(result.crashed.id).lengh === 0 &&
+          board.getCollectionByPlayer(joyoCurrentPlayer.id).lengh
+        ) {
+          joyoCurrentPlayer.move(null, true);
+        } else {
+          playerBeingCrashed = result.crashed;
+        }
+        bleSetLightAnimation("star", 5, JOYO_COLOR_CRASH_PLAYER);
+        blePlayMusic("olwh");
         return;
       } else if (result.collected) {
         blePlayMusic("hred");
@@ -917,7 +942,7 @@ function joyoLight(color) {
 function joyoHandleShowSurrending(surrending) {
   log(JSON.stringify(surrending, null, 4));
   const { left, down, up, right } = surrending;
-  const colors = [right, right, down, down, left, left, up, up].map(
+  const colors = [up, right, right, down, down, left, left, up].map(
     joyoDisplayObjectColor
   );
   bleSetLight(
