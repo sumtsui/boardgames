@@ -644,9 +644,8 @@ class Player {
       }
     }
 
-    this.current = next;
-
     if (result.crashed) return result;
+    this.current = next;
 
     result.collected = this._collectObstacles();
     log("Passedby obstacles", JSON.stringify(this.passedByObstacles, null, 4));
