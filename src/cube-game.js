@@ -521,14 +521,6 @@ class Board {
     }
     return { tradedTo };
   }
-  handlePlayerCrashedToAnotherPlayer(tileNum, player1, player2) {
-    const goingHomePlayer = this.handleCollectionTrading(
-      tileNum,
-      player1,
-      player2
-    ).tradedTo;
-    goingHomePlayer.move(null, true);
-  }
 }
 
 class Player {
@@ -608,12 +600,7 @@ class Player {
       }
     }
   }
-  move(next, isBackToStart) {
-    if (isBackToStart) {
-      this.current = this.start;
-      return;
-    }
-
+  move(next) {
     const nextTile = cubeMap[next];
 
     if (!nextTile || !IN_PLAY_SURFACES.includes(nextTile.surface))
@@ -642,11 +629,10 @@ class Player {
       return result;
     }
 
-    this._validateMove(this.current, next);
+    // not validate move, reply on players to validate
+    // this._validateMove(this.current, next);
 
-    this.absoluteDirection = isBackToStart
-      ? this.startDir
-      : this._getDirectionChange(next);
+    this.absoluteDirection = this._getDirectionChange(next);
 
     // check colliding with obstacles or players
     const thingInPath = board.getThingsInPath(this.current, next);
@@ -779,25 +765,15 @@ class Player {
   }
 }
 
-// class Game {
-//   players = {};
-//   board;
-//   winner;
-//   constructor(players, board) {
-//     this.board = board;
-//     players.forEach((p) => (this.players[p.id] = { collectionTypes: [] }));
-//   }
-// }
-
 // --------- game init ------------
 const board = new Board();
 const cubeMap = board.cubeMap;
 const cubeArrays = board.cubeArrays;
 
 // for browser testing, render after each move
-function move(player, num, isBackHome) {
+function move(player, num) {
   try {
-    const result = player.move(num, isBackHome);
+    const result = player.move(num);
     board.handlePlayerMoved(result.prev, result.current, player);
     renderCube();
     return result;
@@ -853,7 +829,7 @@ function When_JOYO_Read(read) {
 
   if (playerBeingCrashed) {
     try {
-      board.handlePlayerCrashedToAnotherPlayer(
+      board.handleCollectionTrading(
         value,
         joyoCurrentPlayer,
         playerBeingCrashed
@@ -897,19 +873,10 @@ function When_JOYO_Read(read) {
         joyoLight(JOYO_COLOR_WIN);
         blePlayMusic("gwin");
       } else if (result.crashed instanceof Obstacle) {
-        joyoCurrentPlayer.move(null, true);
         joyoLight(JOYO_COLOR_CRASH_OBSTACLE);
         blePlayMusic("olwh");
       } else if (result.crashed instanceof Player) {
-        // very edge case, both offender and victim of a crash has not collect anything yet
-        if (
-          board.getCollectionByPlayer(result.crashed.id).lengh === 0 &&
-          board.getCollectionByPlayer(joyoCurrentPlayer.id).lengh
-        ) {
-          joyoCurrentPlayer.move(null, true);
-        } else {
-          playerBeingCrashed = result.crashed;
-        }
+        playerBeingCrashed = result.crashed;
         bleSetLightAnimation("star", 5, JOYO_COLOR_CRASH_PLAYER);
         blePlayMusic("olwh");
         return;
