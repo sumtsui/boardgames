@@ -252,7 +252,7 @@ class Board {
       }
     }
 
-    log("countPerSurface", countPerSurface);
+    log("countPerSurface", JSON.stringify(countPerSurface, null, 4));
     log("obstacleCount", obstacleCount, "attempt", attempt);
 
     return result;
@@ -867,7 +867,11 @@ function When_JOYO_Read(read) {
 
       board.handlePlayerMoved(result.prev, result.current, joyoCurrentPlayer);
 
-      log(board.getCollectionByPlayer(joyoCurrentPlayer.id).toString());
+      log("result:", JSON.stringify(result, null, 4));
+      log(
+        "collections:",
+        board.getCollectionByPlayer(joyoCurrentPlayer.id).toString()
+      );
 
       if (result.win) {
         joyoLight(JOYO_COLOR_WIN);
