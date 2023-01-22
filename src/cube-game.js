@@ -814,7 +814,7 @@ let playerBeingCrashed = null;
 
 function When_JOYO_Read(read) {
   const value = joyoStickerNumberMapper(read);
-  // log("after", value);
+  log("after", value);
 
   if (!value) return;
 
@@ -936,10 +936,12 @@ function joyoDisplayObjectColor(object) {
 }
 
 function joyoStickerNumberMapper(read) {
-  // log("before", read);
+  log("before", read);
   const PLAYERS = Object.keys(JOYO_PLAYERS_MAP);
-  const RANGE = [2501, 2720];
-  const SUBSET = 2500;
+  // const RANGE = [2501, 2720];
+  // const SUBSET = 2500;
+  const RANGE = [1801, 2020];
+  const SUBSET = 1800;
   if (read >= RANGE[0] && read <= RANGE[1]) return read - SUBSET;
   if (PLAYERS.includes(read.toString())) return read;
 
