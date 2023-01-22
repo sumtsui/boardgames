@@ -564,7 +564,7 @@ class Player {
   };
   id;
   current = null;
-  passedByObstacles = {};
+  lastPassedByObstacle = {};
   goal;
   absoluteDirection;
   start;
@@ -643,12 +643,14 @@ class Player {
         result.crashed = thingInPath.player;
       }
     }
-
     if (result.crashed) return result;
-    this.current = next;
 
+    this.current = next;
     result.collected = this._collectObstacles();
-    log("Passedby obstacles", JSON.stringify(this.passedByObstacles, null, 4));
+    log(
+      "Passedby obstacles",
+      JSON.stringify(this.lastPassedByObstacle, null, 4)
+    );
 
     result.win = this._checkWin(next);
 
@@ -661,7 +663,8 @@ class Player {
   }
   /**
    * check surroundings for collected obstacles
-   * pass by same obstacle's different side twice, count as collected that obstacle
+   * pass by same obstacle's different side twice in 2 moves, count as collected that obstacle
+   * the 2 moves need to be consecutive.
    */
   _collectObstacles() {
     let collected = false;
@@ -672,14 +675,14 @@ class Player {
       if (board.getCollectionByPlayer(this.id).includes(tile.obstacle.value))
         return; // can't collect same type of obstacles twice
 
-      const passedByObstacle = this.passedByObstacles[tile.obstacle.id];
+      const passedByObstacle = this.lastPassedByObstacle[tile.obstacle.id];
 
       // check if current passedby is a different side of a already passedby obstacle, if yes, it is collected by the player
       if (passedByObstacle && passedByObstacle.tileNum !== tileNum) {
         collected = true;
         board.handleObstacleCollected(tile.obstacle.id, this.id);
       } else {
-        this.passedByObstacles[tile.obstacle.id] = {
+        this.lastPassedByObstacle[tile.obstacle.id] = {
           id: tile.obstacle.id,
           tileNum,
         };
