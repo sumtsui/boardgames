@@ -238,17 +238,17 @@ class Board {
             : (countPerSurface[tile.surface] = [currentType.value]);
         });
 
-        log(
-          "Obstacle",
-          JSON.stringify(newObstacle),
-          currentType.value,
-          curTypeIdx
-        );
+        // log(
+        //   "Obstacle",
+        //   JSON.stringify(newObstacle),
+        //   currentType.value,
+        //   curTypeIdx
+        // );
 
         obstacleCount++;
         curTypeIdx++;
       } catch (err) {
-        log(err, start);
+        // log(err, start);
       }
     }
 
@@ -615,18 +615,22 @@ class Player {
     };
 
     // handle player's first move
-    if (!this.current) {
-      this.current = next;
-      this.start = next;
-      cubeMap[next].player = this.id;
-      this.goal =
-        Player.ATTRIBUTES_BY_STARTING_SURFACE[cubeMap[next].surface].goal;
-      this.absoluteDirection =
-        Player.ATTRIBUTES_BY_STARTING_SURFACE[cubeMap[next].surface].dir;
-      this.startDir =
-        Player.ATTRIBUTES_BY_STARTING_SURFACE[cubeMap[next].surface].dir;
-      result.collected = this._collectObstacles();
-      return result;
+    try {
+      if (!this.current) {
+        this.current = next;
+        this.start = next;
+        cubeMap[next].player = this.id;
+        this.goal =
+          Player.ATTRIBUTES_BY_STARTING_SURFACE[cubeMap[next].surface].goal;
+        this.absoluteDirection =
+          Player.ATTRIBUTES_BY_STARTING_SURFACE[cubeMap[next].surface].dir;
+        this.startDir =
+          Player.ATTRIBUTES_BY_STARTING_SURFACE[cubeMap[next].surface].dir;
+        result.collected = this._collectObstacles();
+        return result;
+      }
+    } catch (error) {
+      throw "FIRST_MOVE_FAILED";
     }
 
     // not validate move, reply on players to validate
@@ -899,7 +903,7 @@ function When_JOYO_Read(read) {
         blePlayMusic("chek");
       }
     } catch (e) {
-      log("Error", e);
+      log("move failed", e);
       blePlayMusic("olwh");
     }
   } else {
