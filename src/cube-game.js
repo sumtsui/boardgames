@@ -817,13 +817,12 @@ bleSetLightAnimation("run", 5, 0x00ffff);
 blePlayMusic("fhed");
 const JOYO_COLOR_ERROR = 0xfe0b36;
 const JOYO_COLOR_WIN = 0xf9e716;
-const JOYO_COLOR_CRASH_OBSTACLE = 0x162cf9;
-const JOYO_COLOR_CRASH_PLAYER = 0xf44336;
+const JOYO_COLOR_CRASH = 0xde181c;
 const JOYO_COLOR_SUCCESS = 0x16f93d;
 const JOYO_COLOR_COLLECTED = 0x00ff00;
 const JOYO_COLOR_UNKNOWN_OBJECT = 0xffffff;
 const JOYO_COLOR_PLAYER = 0xee82ee;
-const JOYO_COLOR_PLAYER_SHOOT = 0xee82ee;
+const JOYO_COLOR_PLAYER_SHOOT = 0x7f22e3;
 const JOYO_PLAYERS_MAP = {
   8540: p0,
   8530: p1,
@@ -900,20 +899,21 @@ function When_JOYO_Read(read) {
         joyoLight(JOYO_COLOR_WIN);
         blePlayMusic("gwin");
       } else if (result.crashed instanceof Obstacle) {
-        joyoLight(JOYO_COLOR_CRASH_OBSTACLE);
+        joyoLight(JOYO_COLOR_CRASH);
         blePlayMusic("olwh");
       } else if (result.crashed instanceof Player) {
         playerBeingCrashed = result.crashed;
-        bleSetLightAnimation("star", 5, JOYO_COLOR_CRASH_PLAYER);
         blePlayMusic("olwh");
         return;
       } else if (result.collected && !result.surrending?.up?.player) {
         blePlayMusic("hred");
         bleSetLightAnimation("star", 5, JOYO_COLOR_COLLECTED);
       } else if (result.collected && result.surrending?.up?.player) {
-        // blePlayMusic("hred");
+        blePlayMusic("hred");
         bleSetLightAnimation("star", 5, JOYO_COLOR_COLLECTED);
       } else if (result.surrending?.up?.player) {
+        // blePlayMusic("hred");
+        bleSetLightAnimation("run", 5, JOYO_COLOR_PLAYER_SHOOT);
       } else {
         joyoLight(JOYO_COLOR_SUCCESS);
         blePlayMusic("chek");
