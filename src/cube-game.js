@@ -80,6 +80,7 @@ const OBSTACLE_TYPES = [
   { value: "yellow", color: "FFFF00" },
   { value: "green", color: "008000" },
   { value: "purple", color: "800080" },
+  { value: "orange", color: "FFA500" },
 ];
 const IN_PLAY_SURFACES = [1, 3, 4, 5, 7];
 
@@ -186,7 +187,7 @@ class Board {
 
     const countPerSurface = {};
     const OBSTACLE_TOTAL = 12;
-    const ATTEMPT_TOTAL = 300;
+    const ATTEMPT_TOTAL = 500;
     const result = [];
 
     let obstacleCount = 0;
@@ -199,7 +200,11 @@ class Board {
       const start = tiles[idx];
 
       try {
-        const currentType = OBSTACLE_TYPES[curTypeIdx % OBSTACLE_TYPES.length];
+        // for the first 10, do not use orange yet
+        const currentType =
+          obstacleCount < 10
+            ? OBSTACLE_TYPES[curTypeIdx % 5]
+            : OBSTACLE_TYPES[5];
         const newObstacle = this._generateObstacle(start);
 
         // validate the obstacle
@@ -818,6 +823,7 @@ const JOYO_COLOR_SUCCESS = 0x16f93d;
 const JOYO_COLOR_COLLECTED = 0x00ff00;
 const JOYO_COLOR_UNKNOWN_OBJECT = 0xffffff;
 const JOYO_COLOR_PLAYER = 0xee82ee;
+const JOYO_COLOR_PLAYER_SHOOT = 0xee82ee;
 const JOYO_PLAYERS_MAP = {
   8540: p0,
   8530: p1,
@@ -901,9 +907,13 @@ function When_JOYO_Read(read) {
         bleSetLightAnimation("star", 5, JOYO_COLOR_CRASH_PLAYER);
         blePlayMusic("olwh");
         return;
-      } else if (result.collected) {
+      } else if (result.collected && !result.surrending?.up?.player) {
         blePlayMusic("hred");
         bleSetLightAnimation("star", 5, JOYO_COLOR_COLLECTED);
+      } else if (result.collected && result.surrending?.up?.player) {
+        // blePlayMusic("hred");
+        bleSetLightAnimation("star", 5, JOYO_COLOR_COLLECTED);
+      } else if (result.surrending?.up?.player) {
       } else {
         joyoLight(JOYO_COLOR_SUCCESS);
         blePlayMusic("chek");
