@@ -945,13 +945,21 @@ function joyoDisplayObjectColor(object) {
 
 function joyoStickerNumberMapper(read) {
   log("before", read);
-  const PLAYERS = Object.keys(JOYO_PLAYERS_MAP);
-  // const RANGE = [2501, 2720];
-  // const SUBSET = 2500;
-  const RANGE = [1801, 2020];
   const SUBSET = 1800;
-  if (read >= RANGE[0] && read <= RANGE[1]) return read - SUBSET;
-  if (PLAYERS.includes(read.toString())) return read;
+  const playerIndexs = Object.keys(JOYO_PLAYERS_MAP);
+
+  const numMap = {
+    5: 6, // mapping due to missing sticker
+    1: playerIndexs[0],
+    2: playerIndexs[1],
+    3: playerIndexs[2],
+    4: playerIndexs[3],
+  };
+
+  if (read > SUBSET && read <= SUBSET + 225) {
+    const val = read - SUBSET;
+    return numMap[val] ?? val;
+  }
 
   return undefined;
 }
