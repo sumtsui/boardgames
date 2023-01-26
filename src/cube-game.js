@@ -487,7 +487,9 @@ class Board {
     }, []);
   }
   handlePlayerMoved(prev, next, player) {
-    if (this.cubeMap[prev]) this.cubeMap[prev].player = undefined;
+    if (this.cubeMap[prev]) {
+      this.cubeMap[prev].player = undefined;
+    }
     this.cubeMap[next].player = player;
   }
   handleObstacleCollected(obstacleId, playId) {
@@ -612,6 +614,7 @@ class Player {
       win: false,
       prev: this.current,
       current: next,
+      surrounding: undefined,
     };
 
     // handle player's first move
@@ -627,6 +630,7 @@ class Player {
         this.startDir =
           Player.ATTRIBUTES_BY_STARTING_SURFACE[cubeMap[next].surface].dir;
         result.collected = this._collectObstacles();
+        result.surrounding = this.getSurrounding();
         return result;
       }
     } catch (error) {
@@ -647,14 +651,16 @@ class Player {
         result.crashed = thingInPath.player;
       }
     }
+    this.current = next;
     if (result.crashed) return result;
 
-    this.current = next;
     result.collected = this._collectObstacles();
     log(
       "Passedby obstacles",
       JSON.stringify(this.lastPassedByObstacles, null, 4)
     );
+
+    result.surrounding = this.getSurrounding();
 
     result.win = this._checkWin(next);
 
@@ -730,7 +736,7 @@ class Player {
       if (surface === 5) return "left";
       if (surface === 7) return "up";
     }
-    throw "FAIL_DETACT_DIRECTION";
+    return this.absoluteDirection;
   }
   getSurrounding() {
     if (!this.current) return {};
