@@ -910,10 +910,10 @@ function When_JOYO_Read(read) {
         joyoLight(JOYO_COLOR_WIN);
         blePlayMusic(JOYO_SOUND_WIN);
       } else if (result.crashed instanceof Obstacle) {
-        joyoLight(JOYO_COLOR_CRASH);
+        bleSetLightAnimation("star", 5, JOYO_COLOR_CRASH);
         blePlayMusic(JOYO_SOUND_CRASH);
       } else if (result.crashed instanceof Player) {
-        joyoLight(JOYO_COLOR_CRASH);
+        bleSetLightAnimation("star", 5, JOYO_COLOR_CRASH);
         blePlayMusic(JOYO_SOUND_CRASH);
         playerBeingCrashed = result.crashed;
         return;
