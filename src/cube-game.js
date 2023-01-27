@@ -812,17 +812,24 @@ const p3 = players[3];
 // const game = new Game(players, board);
 
 // ---------- JOYO integration ---------------
+const JOYO_COLOR_ERROR = 0xff0000; // red
+const JOYO_COLOR_WIN = 0xf9e716; // yellow
+const JOYO_COLOR_CRASH = JOYO_COLOR_ERROR;
+const JOYO_COLOR_OK = 0x03f0fc; // turquoise
+const JOYO_COLOR_COLLECTED = JOYO_COLOR_OK;
+const JOYO_COLOR_UNKNOWN_OBJECT = 0xffffff; // white
+const JOYO_COLOR_PLAYER = 0xee82ee; // pink
+const JOYO_SOUND_START_GAME = "fhed";
+const JOYO_SOUND_ERROR = "gswa";
+const JOYO_SOUND_OK = "stat";
+const JOYO_SOUND_SUCCESS = "nwit";
+const JOYO_SOUND_WIN = "gwin";
+const JOYO_SOUND_CRASH = "sk04";
+
 clearAllLight();
-bleSetLightAnimation("run", 5, 0x00ffff);
-blePlayMusic("fhed");
-const JOYO_COLOR_ERROR = 0xfe0b36;
-const JOYO_COLOR_WIN = 0xf9e716;
-const JOYO_COLOR_CRASH = 0xde181c;
-const JOYO_COLOR_SUCCESS = 0x16f93d;
-const JOYO_COLOR_COLLECTED = 0x00ff00;
-const JOYO_COLOR_UNKNOWN_OBJECT = 0xffffff;
-const JOYO_COLOR_PLAYER = 0xee82ee;
-const JOYO_COLOR_PLAYER_SHOOT = 0x7f22e3;
+bleSetLightAnimation("run", 5, JOYO_COLOR_WIN);
+blePlayMusic(JOYO_SOUND_START_GAME);
+
 const JOYO_PLAYERS_MAP = {
   8540: p0,
   8530: p1,
@@ -839,7 +846,7 @@ let playerBeingCrashed = null;
 
 function When_JOYO_Read(read) {
   const value = joyoStickerNumberMapper(read);
-  log("after", value);
+  // log("after", value);
 
   if (!value) return;
 
@@ -859,11 +866,12 @@ function When_JOYO_Read(read) {
         playerBeingCrashed
       );
       playerBeingCrashed = null;
-      joyoLight(JOYO_COLOR_SUCCESS);
-      blePlayMusic("chek");
+      joyoLight(JOYO_COLOR_OK);
+      blePlayMusic(JOYO_SOUND_SUCCESS);
     } catch (err) {
       log(err.message);
-      blePlayMusic("olwh");
+      joyoLight(JOYO_COLOR_ERROR);
+      blePlayMusic(JOYO_SOUND_ERROR);
     }
     return;
   }
@@ -875,9 +883,9 @@ function When_JOYO_Read(read) {
   }
 
   if (JOYO_PLAYERS_MAP[value]) {
-    blePlayMusic("hred");
+    blePlayMusic(JOYO_SOUND_OK);
+    joyoLight(JOYO_COLOR_OK);
     joyoCurrentPlayer = JOYO_PLAYERS_MAP[value];
-    joyoLight(JOYO_COLOR_SUCCESS);
     joyoHandleShowSurrending(joyoCurrentPlayer.getSurrounding());
     log(
       "Current player",
@@ -892,10 +900,7 @@ function When_JOYO_Read(read) {
       board.handlePlayerMoved(result.prev, result.current, joyoCurrentPlayer);
 
       log("result:", JSON.stringify(result, null, 4));
-      log(
-        "direction:",
-        JSON.stringify(joyoCurrentPlayer.absoluteDirection, null, 4)
-      );
+      log("player:", JSON.stringify(joyoCurrentPlayer, null, 4));
       log(
         "collections:",
         board.getCollectionByPlayer(joyoCurrentPlayer.id).toString()
@@ -903,29 +908,29 @@ function When_JOYO_Read(read) {
 
       if (result.win) {
         joyoLight(JOYO_COLOR_WIN);
-        blePlayMusic("gwin");
+        blePlayMusic(JOYO_SOUND_WIN);
       } else if (result.crashed instanceof Obstacle) {
         joyoLight(JOYO_COLOR_CRASH);
-        blePlayMusic("olwh");
+        blePlayMusic(JOYO_SOUND_CRASH);
       } else if (result.crashed instanceof Player) {
         joyoLight(JOYO_COLOR_CRASH);
+        blePlayMusic(JOYO_SOUND_CRASH);
         playerBeingCrashed = result.crashed;
-        blePlayMusic("olwh");
         return;
       } else if (result.collected) {
-        blePlayMusic("hred");
+        blePlayMusic(JOYO_SOUND_SUCCESS);
         bleSetLightAnimation("star", 5, JOYO_COLOR_COLLECTED);
       } else {
-        joyoLight(JOYO_COLOR_SUCCESS);
-        blePlayMusic("chek");
+        joyoLight(JOYO_COLOR_OK);
+        blePlayMusic(JOYO_SOUND_OK);
       }
     } catch (e) {
       log("move failed", e);
-      blePlayMusic("olwh");
+      blePlayMusic(JOYO_SOUND_ERROR);
     }
   } else {
     log("NOT_RECOGNIZE_VALUE", value);
-    blePlayMusic("olwh");
+    blePlayMusic(JOYO_SOUND_ERROR);
   }
 }
 
