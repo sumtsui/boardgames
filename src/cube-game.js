@@ -105,6 +105,7 @@ class Board {
   cubeArrays;
   cubeMap;
   obstacles;
+  activePlayerTotal = 0;
   constructor() {
     this.cubeArrays = this._getCubeArrays();
     this.cubeMap = this._getCubeMap(this.cubeArrays);
@@ -636,6 +637,7 @@ class Player {
           Player.ATTRIBUTES_BY_STARTING_SURFACE[cubeMap[next].surface].dir;
         result.collected = this._collectObstacles();
         result.surrounding = this.getSurrounding();
+        board.activePlayerTotal++;
         return result;
       }
     } catch (error) {
@@ -674,7 +676,14 @@ class Player {
   _checkWin(next) {
     if (next !== this.goal) return false;
 
-    return board.getCollectionByPlayer(this.id).length >= 4;
+    const playerTotalMap = {
+      2: 5,
+      3: 4,
+      4: 3,
+    };
+    const collectionGoal = playerTotalMap[board.activePlayerTotal] || 4;
+
+    return board.getCollectionByPlayer(this.id).length >= collectionGoal;
   }
   /**
    * check surroundings for collected obstacles
