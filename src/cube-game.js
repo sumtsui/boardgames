@@ -503,9 +503,13 @@ class Board {
       .filter((ob) => ob.id === obstacleId)
       .forEach((ob) => (ob.collectedBy = playId));
   }
-  handleObstacleLost(obstacleId) {
+  handleObstacleLost(tileNum, playerId) {
+    const { obstacle } = this.cubeMap[tileNum];
+    if (obstacle?.collectedBy !== playerId) {
+      throw "OBSTACLE_LOST_FAIL";
+    }
     this.obstacles
-      .filter((ob) => ob.id === obstacleId)
+      .filter((ob) => ob.id === obstacle.id)
       .forEach((ob) => (ob.collectedBy = undefined));
   }
   handleCollectionTrading(tileNum, player1, player2) {
@@ -851,7 +855,8 @@ log("cubeMap", JSON.stringify(board.cubeMap));
 
 let joyoCurrentPlayer = null;
 let lastRead = null;
-let playerBeingCrashed = null;
+let victimPlayerInCrash = null;
+let playerCrashedToObstacle = null;
 
 function When_JOYO_Read(read) {
   const value = joyoStickerNumberMapper(read);
@@ -867,14 +872,28 @@ function When_JOYO_Read(read) {
 
   clearAllLight();
 
-  if (playerBeingCrashed) {
+  if (victimPlayerInCrash) {
     try {
       board.handleCollectionTrading(
         value,
         joyoCurrentPlayer,
-        playerBeingCrashed
+        victimPlayerInCrash
       );
-      playerBeingCrashed = null;
+      victimPlayerInCrash = null;
+      joyoLight(JOYO_COLOR_OK);
+      blePlayMusic(JOYO_SOUND_SUCCESS);
+    } catch (err) {
+      log(err.message);
+      joyoLight(JOYO_COLOR_ERROR);
+      blePlayMusic(JOYO_SOUND_ERROR);
+    }
+    return;
+  }
+
+  if (playerCrashedToObstacle) {
+    try {
+      board.handleObstacleLost(value, playerCrashedToObstacle.id);
+      playerCrashedToObstacle = null;
       joyoLight(JOYO_COLOR_OK);
       blePlayMusic(JOYO_SOUND_SUCCESS);
     } catch (err) {
@@ -921,10 +940,12 @@ function When_JOYO_Read(read) {
       } else if (result.crashed instanceof Obstacle) {
         bleSetLightAnimation("star", 5, JOYO_COLOR_CRASH);
         blePlayMusic(JOYO_SOUND_CRASH);
+        victimPlayerInCrash = result.crashed;
+        return;
       } else if (result.crashed instanceof Player) {
         bleSetLightAnimation("star", 5, JOYO_COLOR_CRASH);
         blePlayMusic(JOYO_SOUND_CRASH);
-        playerBeingCrashed = result.crashed;
+        victimPlayerInCrash = result.crashed;
         return;
       } else if (result.collected) {
         blePlayMusic(JOYO_SOUND_SUCCESS);
