@@ -831,6 +831,8 @@ const JOYO_PLAYERS_MAP = {
 };
 const JOYO_OBSTACLE_COLOR_MAP = OBSTACLE_TYPES;
 
+log("cubeMap", JSON.stringify(board.cubeMap));
+
 let joyoCurrentPlayer = null;
 let lastRead = null;
 let playerBeingCrashed = null;
@@ -891,6 +893,10 @@ function When_JOYO_Read(read) {
 
       log("result:", JSON.stringify(result, null, 4));
       log(
+        "direction:",
+        JSON.stringify(joyoCurrentPlayer.absoluteDirection, null, 4)
+      );
+      log(
         "collections:",
         board.getCollectionByPlayer(joyoCurrentPlayer.id).toString()
       );
@@ -902,18 +908,13 @@ function When_JOYO_Read(read) {
         joyoLight(JOYO_COLOR_CRASH);
         blePlayMusic("olwh");
       } else if (result.crashed instanceof Player) {
+        joyoLight(JOYO_COLOR_CRASH);
         playerBeingCrashed = result.crashed;
         blePlayMusic("olwh");
         return;
-      } else if (result.collected && !result.surrending?.up?.player) {
+      } else if (result.collected) {
         blePlayMusic("hred");
         bleSetLightAnimation("star", 5, JOYO_COLOR_COLLECTED);
-      } else if (result.collected && result.surrending?.up?.player) {
-        blePlayMusic("hred");
-        bleSetLightAnimation("star", 5, JOYO_COLOR_COLLECTED);
-      } else if (result.surrending?.up?.player) {
-        // blePlayMusic("hred");
-        bleSetLightAnimation("run", 5, JOYO_COLOR_PLAYER_SHOOT);
       } else {
         joyoLight(JOYO_COLOR_SUCCESS);
         blePlayMusic("chek");
