@@ -485,7 +485,7 @@ class Board {
 
     return result;
   }
-  getCollectionByPlayer(playerId) {
+  getCollectionByPlayerId(playerId) {
     return this.obstacles.reduce((accu, cur) => {
       if (cur.collectedBy === playerId && !accu.includes(cur.value))
         accu.push(cur.value);
@@ -658,9 +658,13 @@ class Player {
     if (thingInPath) {
       if (thingInPath.obstacle) {
         result.crashed = thingInPath.obstacle;
-      } else if (thingInPath.player) {
+      } else if (thingInPath.player?.id !== this.id) {
         result.crashed = thingInPath.player;
       }
+    } else if (nextTile.obstacle) {
+      result.crashed = nextTile.obstacle;
+    } else if (nextTile.player?.id !== this.id) {
+      result.crashed = nextTile.player;
     }
     this.current = next;
     if (result.crashed) return result;
@@ -687,7 +691,7 @@ class Player {
     };
     const collectionGoal = playerTotalMap[board.activePlayerTotal] || 4;
 
-    return board.getCollectionByPlayer(this.id).length >= collectionGoal;
+    return board.getCollectionByPlayerId(this.id).length >= collectionGoal;
   }
   /**
    * check surroundings for collected obstacles
@@ -701,7 +705,7 @@ class Player {
       const tileNum = board.getAdjecentTile(this.current, dir);
       const tile = cubeMap[tileNum];
       if (!tile || !tile.obstacle || tile.obstacle.collectedBy) return;
-      if (board.getCollectionByPlayer(this.id).includes(tile.obstacle.value))
+      if (board.getCollectionByPlayerId(this.id).includes(tile.obstacle.value))
         return; // can't collect same type of obstacles twice
 
       const passedByObstacleWithSameId =
@@ -830,14 +834,17 @@ const JOYO_COLOR_WIN = 0xf9e716; // yellow
 const JOYO_COLOR_CRASH = JOYO_COLOR_ERROR;
 const JOYO_COLOR_OK = 0x03f0fc; // turquoise
 const JOYO_COLOR_COLLECTED = JOYO_COLOR_OK;
+const JOYO_COLOR_COLLECTION_LOST = 0xffffff; // white;
 const JOYO_COLOR_UNKNOWN_OBJECT = 0xffffff; // white
 const JOYO_COLOR_PLAYER = 0xee82ee; // pink
 const JOYO_SOUND_START_GAME = "fhed";
 const JOYO_SOUND_ERROR = "gswa";
 const JOYO_SOUND_OK = "stat";
 const JOYO_SOUND_SUCCESS = "nwit";
+const JOYO_SOUND_COLLECT = "mat4";
 const JOYO_SOUND_WIN = "gwin";
 const JOYO_SOUND_CRASH = "sk04";
+const JOYO_SOUND_LOSE_THING = "hatc";
 
 clearAllLight();
 bleSetLightAnimation("run", 5, JOYO_COLOR_WIN);
@@ -860,7 +867,7 @@ let playerCrashedToObstacle = null;
 
 function When_JOYO_Read(read) {
   const value = joyoStickerNumberMapper(read);
-  // log("after", value);
+  log("after", value);
 
   if (!value) return;
 
@@ -883,84 +890,76 @@ function When_JOYO_Read(read) {
       joyoLight(JOYO_COLOR_OK);
       blePlayMusic(JOYO_SOUND_SUCCESS);
     } catch (err) {
-      log(err.message);
+      log(err);
       joyoLight(JOYO_COLOR_ERROR);
       blePlayMusic(JOYO_SOUND_ERROR);
     }
-    return;
-  }
-
-  if (playerCrashedToObstacle) {
+  } else if (playerCrashedToObstacle) {
     try {
       board.handleObstacleLost(value, playerCrashedToObstacle.id);
       playerCrashedToObstacle = null;
       joyoLight(JOYO_COLOR_OK);
-      blePlayMusic(JOYO_SOUND_SUCCESS);
+      blePlayMusic(JOYO_SOUND_LOSE_THING);
     } catch (err) {
-      log(err.message);
+      log(err);
       joyoLight(JOYO_COLOR_ERROR);
       blePlayMusic(JOYO_SOUND_ERROR);
     }
-    return;
-  }
-
-  // error if no current player and current scan value is not a player tile
-  if (!joyoCurrentPlayer && !JOYO_PLAYERS_MAP[value]) {
-    joyoLight(JOYO_COLOR_ERROR);
-    return;
-  }
-
-  if (JOYO_PLAYERS_MAP[value]) {
+  } else if (JOYO_PLAYERS_MAP[value]) {
     blePlayMusic(JOYO_SOUND_OK);
-    joyoLight(JOYO_COLOR_OK);
     joyoCurrentPlayer = JOYO_PLAYERS_MAP[value];
     joyoHandleShowSurrending(joyoCurrentPlayer.getSurrounding());
     log(
       "Current player",
       JOYO_PLAYERS_MAP[value].id,
       JOYO_PLAYERS_MAP[value].current,
-      board.getCollectionByPlayer(joyoCurrentPlayer.id).toString()
+      board.getCollectionByPlayerId(joyoCurrentPlayer.id).toString()
     );
   } else if (board.cubeMap[value]) {
     try {
       const result = joyoCurrentPlayer.move(value);
-
       board.handlePlayerMoved(result.prev, result.current, joyoCurrentPlayer);
 
       log("result:", JSON.stringify(result, null, 4));
       log("player:", JSON.stringify(joyoCurrentPlayer, null, 4));
       log(
         "collections:",
-        board.getCollectionByPlayer(joyoCurrentPlayer.id).toString()
+        board.getCollectionByPlayerId(joyoCurrentPlayer.id).toString()
       );
+      log("cubeMap", JSON.stringify(board.cubeMap));
 
       if (result.win) {
         joyoLight(JOYO_COLOR_WIN);
         blePlayMusic(JOYO_SOUND_WIN);
       } else if (result.crashed instanceof Obstacle) {
-        bleSetLightAnimation("star", 5, JOYO_COLOR_CRASH);
+        bleSetLightAnimation("star", 10, JOYO_COLOR_CRASH);
         blePlayMusic(JOYO_SOUND_CRASH);
-        victimPlayerInCrash = result.crashed;
-        return;
+        if (board.getCollectionByPlayerId(joyoCurrentPlayer.id).length > 0) {
+          playerCrashedToObstacle = joyoCurrentPlayer;
+        } else {
+          log("crashed to obstacle but player has nothing to lose");
+        }
       } else if (result.crashed instanceof Player) {
-        bleSetLightAnimation("star", 5, JOYO_COLOR_CRASH);
+        bleSetLightAnimation("star", 10, JOYO_COLOR_CRASH);
         blePlayMusic(JOYO_SOUND_CRASH);
-        victimPlayerInCrash = result.crashed;
-        return;
+        if (
+          board.getCollectionByPlayerId(joyoCurrentPlayer.id).length > 0 ||
+          board.getCollectionByPlayerId(result.crashed.id).length > 0
+        )
+          victimPlayerInCrash = result.crashed;
       } else if (result.collected) {
-        blePlayMusic(JOYO_SOUND_SUCCESS);
-        bleSetLightAnimation("star", 5, JOYO_COLOR_COLLECTED);
+        blePlayMusic(JOYO_SOUND_COLLECT);
+        bleSetLightAnimation("star", 10, JOYO_COLOR_COLLECTED);
       } else {
         joyoLight(JOYO_COLOR_OK);
         blePlayMusic(JOYO_SOUND_OK);
       }
     } catch (e) {
-      log("move failed", e);
+      log("MOVE_FAILED", e);
       blePlayMusic(JOYO_SOUND_ERROR);
     }
   } else {
     log("NOT_RECOGNIZE_VALUE", value);
-    blePlayMusic(JOYO_SOUND_ERROR);
   }
 }
 
@@ -1002,6 +1001,7 @@ function joyoDisplayObjectColor(object) {
 function joyoStickerNumberMapper(read) {
   log("before", read);
   const SUBSET = 1800;
+  // const SUBSET = 2500;
   const playerIndexs = Object.keys(JOYO_PLAYERS_MAP);
 
   const numMap = {
@@ -1017,5 +1017,5 @@ function joyoStickerNumberMapper(read) {
     return numMap[val] ?? val;
   }
 
-  return undefined;
+  return read;
 }

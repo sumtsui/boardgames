@@ -44,6 +44,7 @@ function makeTile(left, top, isPlayArea, isStartTile, color, player) {
   tileCount++;
   wrapper.appendChild(tile);
 }
+
 function renderCube() {
   wrapper.innerHTML = "";
   while (tileCount <= TILE_TOTAL) {
@@ -52,9 +53,9 @@ function renderCube() {
     const isPlayArea =
       (tileCount % BOARD_WIDTH > 5 && tileCount % BOARD_WIDTH < 11) ||
       (tileCount > 75 && tileCount < 151);
-    const obstacle = board.cubeMap[tileCount].obstacle;
+    const obstacle = CUBE_MAP[tileCount].obstacle;
     const isPlayerStart = PLAYER_START_TILES.includes(tileCount);
-    const player = board.cubeMap[tileCount].player;
+    const player = CUBE_MAP[tileCount].player;
     makeTile(left, top, isPlayArea, isPlayerStart, obstacle?.color, player);
   }
   tileCount = 1;
