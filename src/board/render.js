@@ -53,9 +53,9 @@ function renderCube() {
     const isPlayArea =
       (tileCount % BOARD_WIDTH > 5 && tileCount % BOARD_WIDTH < 11) ||
       (tileCount > 75 && tileCount < 151);
-    const obstacle = CUBE_MAP[tileCount].obstacle;
+    const obstacle = cubeMap[tileCount].obstacle;
     const isPlayerStart = PLAYER_START_TILES.includes(tileCount);
-    const player = CUBE_MAP[tileCount].player;
+    const player = cubeMap[tileCount].player;
     makeTile(left, top, isPlayArea, isPlayerStart, obstacle?.color, player);
   }
   tileCount = 1;

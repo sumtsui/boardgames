@@ -1,3 +1,20 @@
+interface Array<T> {
+  fill<U>(thisArg?: any): U[];
+}
+interface Object {
+  values(obj: Object): string[];
+}
+declare function print(...args): void;
+declare function renderCube(): void;
+declare function clearAllLight(): void;
+declare function bleSetLightAnimation(
+  type: string,
+  duration: number,
+  color: number
+): void;
+declare function blePlayMusic(type: string): void;
+declare function bleSetLight(type: string): void;
+
 Array.prototype.map = function (callbackFn) {
   var arr = [];
   for (var i = 0; i < this.length; i++) {
@@ -56,6 +73,7 @@ Array.prototype.forEach = function forEach(callback, thisArg) {
     callback.call(thisArg, array[i], i, array);
   }
 };
+
 Object.prototype.values = function values(obj) {
   return Object.keys(obj).map(function (key) {
     return obj[key];
@@ -492,11 +510,26 @@ class Board {
       return accu;
     }, []);
   }
-  handlePlayerMoved(prev, next, player) {
+  handlePlayerMoved(moveResult, player) {
+    const { prev, current, shoot } = moveResult;
     if (this.cubeMap[prev]) {
       this.cubeMap[prev].player = undefined;
     }
-    this.cubeMap[next].player = player;
+    this.cubeMap[current].player = player;
+
+    // handle shot player move
+    if (shoot) {
+      const moveTo = this.getAdjecentTile(
+        shoot.player.current,
+        shoot.direction
+      );
+      try {
+        const result = shoot.player.move(moveTo, { isShot: true });
+        this.handlePlayerMoved(result, shoot.player);
+      } catch (error) {
+        console.log("no place to go even being shot");
+      }
+    }
   }
   handleObstacleCollected(obstacleId, playId) {
     this.obstacles
@@ -581,6 +614,7 @@ class Player {
   absoluteDirection;
   start;
   startDir;
+  win;
 
   constructor(id) {
     this.id = id.toString();
@@ -612,7 +646,7 @@ class Player {
       }
     }
   }
-  move(next) {
+  move(next, { isShot } = { isShot: false }) {
     const nextTile = cubeMap[next];
 
     if (!nextTile || !IN_PLAY_SURFACES.includes(nextTile.surface))
@@ -625,6 +659,7 @@ class Player {
       prev: this.current,
       current: next,
       surrounding: undefined,
+      shoot: undefined,
     };
 
     // handle player's first move
@@ -666,20 +701,28 @@ class Player {
     } else if (nextTile.player?.id !== this.id) {
       result.crashed = nextTile.player;
     }
+
     this.current = next;
     if (result.crashed) return result;
 
+    if (!isShot) result.shoot = this._shoot();
     result.collected = this._collectObstacles();
     log(
       "Passedby obstacles",
       JSON.stringify(this.lastPassedByObstacles, null, 4)
     );
 
-    result.surrounding = this.getSurrounding();
+    if (!isShot) result.surrounding = this.getSurrounding();
 
     result.win = this._checkWin(next);
 
     return result;
+  }
+  _shoot() {
+    const { up } = this.getSurrounding();
+    if (up?.player) {
+      return { direction: this.absoluteDirection, player: up.player };
+    }
   }
   _checkWin(next) {
     if (next !== this.goal) return false;
@@ -760,7 +803,7 @@ class Player {
     }
     return this.absoluteDirection;
   }
-  getSurrounding() {
+  getSurrounding(): { up?: any; down?: any; left?: any; right?: any } {
     if (!this.current) return {};
     // relative directions based on current player front facing absoluteDirection
     const sur = this._getAbsoluteSurrounding(this.current);
@@ -813,7 +856,7 @@ const cubeArrays = board.cubeArrays;
 function move(player, num) {
   try {
     const result = player.move(num);
-    board.handlePlayerMoved(result.prev, result.current, player);
+    board.handlePlayerMoved(result, player);
     renderCube();
     return result;
   } catch (error) {
@@ -857,8 +900,6 @@ const JOYO_PLAYERS_MAP = {
   8510: p3,
 };
 const JOYO_OBSTACLE_COLOR_MAP = OBSTACLE_TYPES;
-
-log("cubeMap", JSON.stringify(board.cubeMap));
 
 let joyoCurrentPlayer = null;
 let lastRead = null;
@@ -918,7 +959,7 @@ function When_JOYO_Read(read) {
   } else if (board.cubeMap[value]) {
     try {
       const result = joyoCurrentPlayer.move(value);
-      board.handlePlayerMoved(result.prev, result.current, joyoCurrentPlayer);
+      board.handlePlayerMoved(result, joyoCurrentPlayer);
 
       log("result:", JSON.stringify(result, null, 4));
       log("player:", JSON.stringify(joyoCurrentPlayer, null, 4));
@@ -1000,8 +1041,8 @@ function joyoDisplayObjectColor(object) {
 
 function joyoStickerNumberMapper(read) {
   log("before", read);
-  const SUBSET = 1800;
-  // const SUBSET = 2500;
+  // const SUBSET = 1800;
+  const SUBSET = 2500;
   const playerIndexs = Object.keys(JOYO_PLAYERS_MAP);
 
   const numMap = {
