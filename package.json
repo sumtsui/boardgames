@@ -3,9 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "webpack": "webpack",
-    "babel": "babel built/cube-game.js --out-dir dist",
-    "tsc": "tsc"
+    "tsc": "tsc --watch"
   },
   "keywords": [],
   "author": "",

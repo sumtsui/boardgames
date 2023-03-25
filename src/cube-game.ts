@@ -1,9 +1,3 @@
-interface Array<T> {
-  fill<U>(thisArg?: any): U[];
-}
-interface Object {
-  values(obj: Object): string[];
-}
 declare function print(...args): void;
 declare function renderCube(): void;
 declare function clearAllLight(): void;
@@ -72,12 +66,6 @@ Array.prototype.forEach = function forEach(callback, thisArg) {
   for (var i = 0, l = array.length; i !== l; ++i) {
     callback.call(thisArg, array[i], i, array);
   }
-};
-
-Object.prototype.values = function values(obj) {
-  return Object.keys(obj).map(function (key) {
-    return obj[key];
-  });
 };
 
 Number.isInteger =
@@ -189,7 +177,7 @@ class Board {
     };
     const CORNERS = [70, 145, 140];
     const tiles = Array(TILE_TOTAL)
-      .fill()
+      .fill(undefined)
       .map((_, i) => i + 1)
       .filter((i) => {
         const start = this.cubeMap[i];
@@ -511,25 +499,11 @@ class Board {
     }, []);
   }
   handlePlayerMoved(moveResult, player) {
-    const { prev, current, shoot } = moveResult;
+    const { prev, current } = moveResult;
     if (this.cubeMap[prev]) {
       this.cubeMap[prev].player = undefined;
     }
     this.cubeMap[current].player = player;
-
-    // handle shot player move
-    if (shoot) {
-      const moveTo = this.getAdjecentTile(
-        shoot.player.current,
-        shoot.direction
-      );
-      try {
-        const result = shoot.player.move(moveTo, { isShot: true });
-        this.handlePlayerMoved(result, shoot.player);
-      } catch (error) {
-        console.log("no place to go even being shot");
-      }
-    }
   }
   handleObstacleCollected(obstacleId, playId) {
     this.obstacles
@@ -646,7 +620,7 @@ class Player {
       }
     }
   }
-  move(next, { isShot } = { isShot: false }) {
+  move(next: string) {
     const nextTile = cubeMap[next];
 
     if (!nextTile || !IN_PLAY_SURFACES.includes(nextTile.surface))
@@ -705,14 +679,14 @@ class Player {
     this.current = next;
     if (result.crashed) return result;
 
-    if (!isShot) result.shoot = this._shoot();
+    result.shoot = this._shoot();
     result.collected = this._collectObstacles();
     log(
       "Passedby obstacles",
       JSON.stringify(this.lastPassedByObstacles, null, 4)
     );
 
-    if (!isShot) result.surrounding = this.getSurrounding();
+    result.surrounding = this.getSurrounding();
 
     result.win = this._checkWin(next);
 
@@ -847,13 +821,41 @@ class Player {
   }
 }
 
+class TaskRunner {
+  todo: Record<string, Function>;
+  default: Function;
+
+  constructor({
+    tasks,
+    defaultTask,
+  }: {
+    tasks: { name: string; task: Function }[];
+    defaultTask: Function;
+  }) {
+    this.todo = tasks.reduce((accu, cur) => {
+      accu[cur.name] = cur.task;
+      return accu;
+    }, {});
+    this.default = defaultTask;
+  }
+
+  run() {
+    for (const task in this.todo) {
+      console.log("task", task);
+      this.todo[task]?.();
+      this.todo[task] = null;
+    }
+    this.default();
+  }
+}
+
 // --------- game init ------------
 const board = new Board();
 const cubeMap = board.cubeMap;
 const cubeArrays = board.cubeArrays;
 
 // for browser testing, render after each move
-function move(player, num) {
+function move(player: Player, num: string) {
   try {
     const result = player.move(num);
     board.handlePlayerMoved(result, player);
@@ -888,6 +890,8 @@ const JOYO_SOUND_COLLECT = "mat4";
 const JOYO_SOUND_WIN = "gwin";
 const JOYO_SOUND_CRASH = "sk04";
 const JOYO_SOUND_LOSE_THING = "hatc";
+const JOYO_SOUND_SHOOT = "tala";
+const JOYO_COLOR_SHOOT = 0x5beb34;
 
 clearAllLight();
 bleSetLightAnimation("run", 5, JOYO_COLOR_WIN);
@@ -901,10 +905,11 @@ const JOYO_PLAYERS_MAP = {
 };
 const JOYO_OBSTACLE_COLOR_MAP = OBSTACLE_TYPES;
 
-let joyoCurrentPlayer = null;
 let lastRead = null;
-let victimPlayerInCrash = null;
-let playerCrashedToObstacle = null;
+let joyoCurrentPlayer: Player | null = null;
+let playerCrashedByOther: Player | null = null;
+let playerCrashedToObstacle: Player | null = null;
+let playerBeingShot: Player | null = null;
 
 function When_JOYO_Read(read) {
   const value = joyoStickerNumberMapper(read);
@@ -920,14 +925,14 @@ function When_JOYO_Read(read) {
 
   clearAllLight();
 
-  if (victimPlayerInCrash) {
+  if (playerCrashedByOther) {
     try {
       board.handleCollectionTrading(
         value,
         joyoCurrentPlayer,
-        victimPlayerInCrash
+        playerCrashedByOther
       );
-      victimPlayerInCrash = null;
+      playerCrashedByOther = null;
       joyoLight(JOYO_COLOR_OK);
       blePlayMusic(JOYO_SOUND_SUCCESS);
     } catch (err) {
@@ -939,6 +944,17 @@ function When_JOYO_Read(read) {
     try {
       board.handleObstacleLost(value, playerCrashedToObstacle.id);
       playerCrashedToObstacle = null;
+      joyoLight(JOYO_COLOR_OK);
+      blePlayMusic(JOYO_SOUND_LOSE_THING);
+    } catch (err) {
+      log(err);
+      joyoLight(JOYO_COLOR_ERROR);
+      blePlayMusic(JOYO_SOUND_ERROR);
+    }
+  } else if (playerBeingShot) {
+    try {
+      board.handleObstacleLost(value, playerCrashedToObstacle.id);
+      playerBeingShot = null;
       joyoLight(JOYO_COLOR_OK);
       blePlayMusic(JOYO_SOUND_LOSE_THING);
     } catch (err) {
@@ -972,7 +988,10 @@ function When_JOYO_Read(read) {
       if (result.win) {
         joyoLight(JOYO_COLOR_WIN);
         blePlayMusic(JOYO_SOUND_WIN);
-      } else if (result.crashed instanceof Obstacle) {
+        return;
+      }
+
+      if (result.crashed instanceof Obstacle) {
         bleSetLightAnimation("star", 10, JOYO_COLOR_CRASH);
         blePlayMusic(JOYO_SOUND_CRASH);
         if (board.getCollectionByPlayerId(joyoCurrentPlayer.id).length > 0) {
@@ -980,21 +999,36 @@ function When_JOYO_Read(read) {
         } else {
           log("crashed to obstacle but player has nothing to lose");
         }
-      } else if (result.crashed instanceof Player) {
-        bleSetLightAnimation("star", 10, JOYO_COLOR_CRASH);
+        return;
+      }
+
+      if (result.crashed instanceof Player) {
+        bleSetLightAnimation("star", 6, JOYO_COLOR_CRASH);
         blePlayMusic(JOYO_SOUND_CRASH);
         if (
           board.getCollectionByPlayerId(joyoCurrentPlayer.id).length > 0 ||
           board.getCollectionByPlayerId(result.crashed.id).length > 0
         )
-          victimPlayerInCrash = result.crashed;
-      } else if (result.collected) {
-        blePlayMusic(JOYO_SOUND_COLLECT);
-        bleSetLightAnimation("star", 10, JOYO_COLOR_COLLECTED);
-      } else {
-        joyoLight(JOYO_COLOR_OK);
-        blePlayMusic(JOYO_SOUND_OK);
+          playerCrashedByOther = result.crashed;
+
+        return;
       }
+
+      if (result.collected) {
+        blePlayMusic(JOYO_SOUND_COLLECT);
+        bleSetLightAnimation("run", 6, JOYO_COLOR_COLLECTED);
+        return;
+      }
+
+      if (result.shoot instanceof Player) {
+        playerBeingShot = result.shoot;
+        blePlayMusic(JOYO_SOUND_SHOOT);
+        bleSetLightAnimation("star", 5, JOYO_COLOR_SHOOT);
+        return;
+      }
+
+      joyoLight(JOYO_COLOR_OK);
+      blePlayMusic(JOYO_SOUND_OK);
     } catch (e) {
       log("MOVE_FAILED", e);
       blePlayMusic(JOYO_SOUND_ERROR);
