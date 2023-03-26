@@ -821,33 +821,32 @@ class Player {
   }
 }
 
-class TaskRunner {
-  todo: Record<string, Function>;
-  default: Function;
+// class TaskRunner {
+//   todo: Record<string, Function>;
+//   default: Function;
 
-  constructor({
-    tasks,
-    defaultTask,
-  }: {
-    tasks: { name: string; task: Function }[];
-    defaultTask: Function;
-  }) {
-    this.todo = tasks.reduce((accu, cur) => {
-      accu[cur.name] = cur.task;
-      return accu;
-    }, {});
-    this.default = defaultTask;
-  }
+//   constructor({
+//     tasks,
+//     defaultTask,
+//   }: {
+//     tasks: { name: string; task: Function }[];
+//     defaultTask: Function;
+//   }) {
+//     this.todo = tasks.reduce((accu, cur) => {
+//       accu[cur.name] = cur.task;
+//       return accu;
+//     }, {});
+//     this.default = defaultTask;
+//   }
 
-  run() {
-    for (const task in this.todo) {
-      console.log("task", task);
-      this.todo[task]?.();
-      this.todo[task] = null;
-    }
-    this.default();
-  }
-}
+//   run() {
+//     for (const task in this.todo) {
+//       this.todo[task]?.();
+//       this.todo[task] = null;
+//     }
+//     this.default();
+//   }
+// }
 
 // --------- game init ------------
 const board = new Board();
@@ -1017,7 +1016,6 @@ function When_JOYO_Read(read) {
       if (result.collected) {
         blePlayMusic(JOYO_SOUND_COLLECT);
         bleSetLightAnimation("run", 6, JOYO_COLOR_COLLECTED);
-        return;
       }
 
       if (result.shoot instanceof Player) {
